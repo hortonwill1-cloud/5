@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -84,6 +85,7 @@ def render_blender(project: Project, ctx: SiteContext | None, model: Model, v: V
         "samples": samples or v.samples,
         "photomontage": bool(v.background_photo),
         "exposure": exposure if exposure is not None else project.sheet.get("render_exposure", -4.5),
+        "exposure_offset": v.exposure_offset - 0.4,
         "out": str((outdir / f"{v.name}.png").resolve()),
     }
     if save_blend:
@@ -91,11 +93,42 @@ def render_blender(project: Project, ctx: SiteContext | None, model: Model, v: V
     if v.textures:
         from ..assets import textures_for
         job["textures"] = textures_for(used, "4k" if percent >= 100 else "2k")
+    if v.ortho and ctx is not None and project.lat is not None:
+        try:
+            from ..model3d import apply_clips
+            from ..ortho import fetch_ortho, mask_for
+            o = fetch_ortho(ctx.frame, ctx.radius_m)
+            polys = list(project.clip_context)
+            if project.building is not None:
+                polys.append(project.building.to_site(project.building.footprint()).buffer(1.0))
+            if project.stadium:
+                from .. import stadium as st
+                fieldg, secs = st.from_spec(project, ctx)
+                polys += [st.bowl_polygon(fieldg, s_).buffer(1.0) for s_ in secs]
+            if polys:
+                o["mask"] = mask_for(o, polys, outdir / "model" / "ortho_mask.png")
+            job["ortho"] = o
+            info["ortho"] = o["source"]
+        except Exception as e:  # noqa: BLE001
+            print(f"  orthoimagery unavailable ({e}); procedural ground")
+    job["camera_fx"] = v.camera_fx
+    if v.tree_models and ctx is not None and ctx.of("tree"):
+        try:
+            from ..assets import TREE_MODELS, model_gltf
+            job["tree_models"] = [str(model_gltf(s_).resolve()) for s_ in TREE_MODELS]
+            excl = None
+            if project.building is not None:
+                excl = project.building.to_site(project.building.footprint()).buffer(0.5)
+            job["trees"] = [{"x": t.geom.x, "y": t.geom.y, "z": ctx.ground_z(t.geom.x, t.geom.y),
+                             "h": t.props.get("height_m", 8.0), "crown": t.props.get("crown_m", 5.0)}
+                            for t in ctx.of("tree") if excl is None or not excl.contains(t.geom)]
+        except Exception as e:  # noqa: BLE001
+            print(f"  tree models unavailable ({e}); proxy canopies")
     if v.sky != "physical" and el > 0:
         from ..assets import choose_sky
         try:
             job["sky"] = choose_sky(el, blender, v.sky, "4k" if percent >= 100 else "2k")
-            job["exposure_offset"] = v.exposure_offset
+            job["exposure_offset"] = v.exposure_offset - 0.4
         except Exception as e:  # noqa: BLE001
             print(f"  HDRI sky unavailable ({e}); using physical sky")
     jp = outdir / f"{v.name}.job.json"
@@ -108,12 +141,45 @@ def render_blender(project: Project, ctx: SiteContext | None, model: Model, v: V
         raise RuntimeError(f"Blender failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}")
     if v.background_photo:
         out = composite(out, Path(v.background_photo), outdir / f"{v.name}-photomontage.png")
+    elif v.camera_fx:
+        lens_post(out, out)
     if job.get("sky"):
         info["sky_hdri"] = job["sky"]["slug"]
         info["sky_sun_elevation_mismatch_deg"] = job["sky"]["elev_mismatch_deg"]
         info["shadows"] = "exact sun lamp at computed position (HDRI sun removed)"
     _write_metadata(project, v, cam, info, az, el, outdir)
     return out
+
+
+def lens_post(src: Path, dst: Path, vignette: float = 0.15, ca_px: float = 0.6,
+              grain: float = 0.008, seed: int = 7) -> Path:
+    """Photographic lens/sensor signature: vignetting, lateral chromatic aberration, grain."""
+    from PIL import Image
+
+    im = Image.open(src)
+    arr = np.asarray(im.convert("RGB"), dtype=np.float32) / 255.0
+    H, W, _ = arr.shape
+    yy, xx = np.mgrid[0:H, 0:W]
+    cx, cy = (W - 1) / 2, (H - 1) / 2
+    r = np.hypot((xx - cx) / cx, (yy - cy) / cy) / math.sqrt(2)
+    # lateral CA: scale red out / blue in by a fraction of a pixel at the corners
+    out = arr.copy()
+    for ch, k in ((0, ca_px), (2, -ca_px)):
+        sc = 1 + k / max(W, H) * 2
+        sx = np.clip(cx + (xx - cx) / sc, 0, W - 1).astype(np.float32)
+        sy = np.clip(cy + (yy - cy) / sc, 0, H - 1).astype(np.float32)
+        x0, y0 = np.floor(sx).astype(int), np.floor(sy).astype(int)
+        x1, y1 = np.minimum(x0 + 1, W - 1), np.minimum(y0 + 1, H - 1)
+        fx, fy = sx - x0, sy - y0
+        c = arr[..., ch]
+        out[..., ch] = (c[y0, x0] * (1 - fx) * (1 - fy) + c[y0, x1] * fx * (1 - fy)
+                        + c[y1, x0] * (1 - fx) * fy + c[y1, x1] * fx * fy)
+    out *= (1 - vignette * r ** 2.2)[..., None]                       # natural vignette
+    rng = np.random.default_rng(seed)
+    lum = out.mean(2, keepdims=True)
+    out += rng.normal(0, grain, (H, W, 1)).astype(np.float32) * np.sqrt(np.clip(lum, 0.02, 1))
+    Image.fromarray((np.clip(out, 0, 1) * 255 + 0.5).astype(np.uint8)).save(dst)
+    return dst
 
 
 def composite(render: Path, photo: Path, out: Path) -> Path:

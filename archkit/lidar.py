@@ -396,7 +396,7 @@ def apply_to_context(ctx, spacing_m: float = 0.5, project: str | None = None,
     n_meas = 0
     for f in ctx.of("building") + ctx.of("building_part"):
         g = f.geom
-        cell = 1.0 if g.area < 3000 else 2.0
+        cell = 1.0 if g.area < 60000 else 2.0   # 1 m keeps stadium tiers crisp
         polys = list(g.geoms) if g.geom_type == "MultiPolygon" else [g]
         grids = []
         for k, p in enumerate(polys):

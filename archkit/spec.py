@@ -185,6 +185,9 @@ class View:
     sky: str = "partly_cloudy"         # physical | clear | partly_cloudy | overcast (HDRI)
     textures: bool = True              # scanned PBR textures (Poly Haven, CC0)
     exposure_offset: float = 0.0       # EV relative to automatic exposure
+    ortho: bool = True                 # drape NAIP aerial photo on ground / context roofs
+    camera_fx: bool = True             # glare, haze, vignette, chromatic aberration, grain
+    tree_models: bool = True           # scanned tree models at LiDAR tree positions
 
 
 @dataclass
@@ -336,7 +339,9 @@ def load(path: str | Path) -> Project:
                               if v.get("background_photo") else None),
             camera_solve=v.get("camera_solve"), samples=int(v.get("samples", 512)),
             sky=v.get("sky", "partly_cloudy"), textures=bool(v.get("textures", True)),
-            exposure_offset=float(v.get("exposure_offset", 0.0))))
+            exposure_offset=float(v.get("exposure_offset", 0.0)),
+            ortho=bool(v.get("ortho", True)), camera_fx=bool(v.get("camera_fx", True)),
+            tree_models=bool(v.get("tree_models", True))))
 
     zoning = dict(d.get("zoning", {}))
     for key in ("max_height",):

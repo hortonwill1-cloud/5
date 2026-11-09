@@ -103,7 +103,119 @@ def make_textured(name, p, t):
     return mat
 
 
+ORTHO_MATS = {"terrain", "grass", "asphalt", "sidewalk", "context_roof", "water"}
+
+
+def drape_ortho(mat):
+    """Replace base colour with the georeferenced aerial photo (soft-light blended with the
+    material's own fine detail), falling back to the material where the mask is black."""
+    o = job.get("ortho")
+    if not o or mat.name.split(".")[0] not in ORTHO_MATS:
+        return
+    nt = mat.node_tree
+    nodes, links = nt.nodes, nt.links
+    bsdf = nodes.get("Principled BSDF")
+    base_in = bsdf.inputs["Base Color"]
+    detail = base_in.links[0].from_socket if base_in.links else None
+    if detail is None:
+        rgb = nodes.new("ShaderNodeRGB")
+        rgb.outputs[0].default_value = tuple(base_in.default_value)
+        detail = rgb.outputs[0]
+    texco = nodes.new("ShaderNodeTexCoord")
+    mp = nodes.new("ShaderNodeMapping")
+    mp.inputs["Location"].default_value = (-o["x0"] / o["w"], -o["y0"] / o["h"], 0)
+    mp.inputs["Scale"].default_value = (1 / o["w"], 1 / o["h"], 1)
+    links.new(texco.outputs["Object"], mp.inputs["Vector"])
+
+    def img(path, noncolor=False):
+        n = nodes.new("ShaderNodeTexImage")
+        n.image = bpy.data.images.load(path, check_existing=True)
+        if noncolor:
+            n.image.colorspace_settings.name = "Non-Color"
+        n.extension = "EXTEND"
+        n.interpolation = "Cubic"
+        links.new(mp.outputs["Vector"], n.inputs["Vector"])
+        return n
+
+    photo = img(o["path"]).outputs["Color"]
+    # photo carries colour; the scanned material adds high-frequency detail (luminance ratio)
+    bw = nodes.new("ShaderNodeRGBToBW")
+    links.new(detail, bw.inputs[0])
+    blur = nodes.new("ShaderNodeMath")
+    blur.operation = "MULTIPLY"
+    blur.inputs[1].default_value = 1.0 / max(o.get("detail_mean", 0.25), 0.05)
+    links.new(bw.outputs[0], blur.inputs[0])
+    lerp = nodes.new("ShaderNodeMapRange")       # keep detail subtle: 0.75..1.25
+    lerp.inputs["From Min"].default_value = 0.0
+    lerp.inputs["From Max"].default_value = 2.0
+    lerp.inputs["To Min"].default_value = 0.75
+    lerp.inputs["To Max"].default_value = 1.25
+    links.new(blur.outputs[0], lerp.inputs["Value"])
+    mul = nodes.new("ShaderNodeMix")
+    mul.data_type = "RGBA"
+    mul.blend_type = "MULTIPLY"
+    mul.inputs["Factor"].default_value = 1.0
+    links.new(photo, mul.inputs[6])
+    comb = nodes.new("ShaderNodeCombineColor")
+    for i in range(3):
+        links.new(lerp.outputs["Result"], comb.inputs[i])
+    links.new(comb.outputs[0], mul.inputs[7])
+    out = mul.outputs[2]
+    # only on up-facing surfaces: a vertical photo smears down walls and steep slopes
+    geo = nodes.new("ShaderNodeNewGeometry")
+    sep = nodes.new("ShaderNodeSeparateXYZ")
+    links.new(geo.outputs["Normal"], sep.inputs[0])
+    up = nodes.new("ShaderNodeMapRange")
+    up.inputs["From Min"].default_value = 0.45
+    up.inputs["From Max"].default_value = 0.7
+    links.new(sep.outputs["Z"], up.inputs["Value"])
+    fac = up.outputs["Result"]
+    if o.get("mask"):
+        mm = nodes.new("ShaderNodeMath")
+        mm.operation = "MULTIPLY"
+        links.new(img(o["mask"], True).outputs["Color"], mm.inputs[0])
+        links.new(fac, mm.inputs[1])
+        fac = mm.outputs[0]
+    mix = nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    links.new(fac, mix.inputs["Factor"])
+    links.new(detail, mix.inputs[6])
+    links.new(out, mix.inputs[7])
+    links.new(mix.outputs[2], base_in)
+
+
+def add_bevel(mat, radius=0.012):
+    """Rounded-edge shading: real edges catch highlights; CG's razor edges read as fake."""
+    nt = mat.node_tree
+    bsdf = nt.nodes.get("Principled BSDF")
+    if bsdf is None:
+        return
+    bev = nt.nodes.new("ShaderNodeBevel")
+    bev.samples = 6
+    bev.inputs["Radius"].default_value = radius
+    nin = bsdf.inputs["Normal"]
+    if nin.links:
+        src = nin.links[0].from_node
+        if src.type == "BUMP" and not src.inputs["Normal"].links:
+            nt.links.new(bev.outputs["Normal"], src.inputs["Normal"])
+    else:
+        nt.links.new(bev.outputs["Normal"], nin)
+
+
+ARCH_MATS = {"facade", "stucco_white", "brick_red", "brick_buff", "concrete", "board_formed",
+             "wood_cedar", "fiber_cement", "metal_panel", "zinc", "limestone", "plaster",
+             "frame_black", "frame_white", "door", "slab", "context", "seat_blue", "seat_white"}
+
+
 def make_material(name, p):
+    mat = _make_material(name, p)
+    drape_ortho(mat)
+    if name in ARCH_MATS:
+        add_bevel(mat)
+    return mat
+
+
+def _make_material(name, p):
     tex = job.get("textures", {}).get(name)
     if tex:
         return make_textured(name, p, tex)
@@ -320,6 +432,87 @@ def setup_camera(cam_json):
     return cam
 
 
+def scatter_tree_models():
+    """Replace proxy canopies with instanced scanned tree models sized to LiDAR trees."""
+    import random
+
+    trees, models = job.get("trees"), job.get("tree_models")
+    if not trees or not models:
+        return
+    for ob in list(bpy.data.objects):
+        if "trees" in ob.name.lower() and ob.type == "MESH":
+            bpy.data.objects.remove(ob, do_unlink=True)
+    lib = []
+    for i, path in enumerate(models):
+        coll = bpy.data.collections.new(f"tree_model_{i}")
+        before = set(bpy.data.objects)
+        bpy.ops.import_scene.gltf(filepath=path)
+        new = [o for o in bpy.data.objects if o not in before]
+        for o in new:
+            for c in list(o.users_collection):
+                c.objects.unlink(o)
+            coll.objects.link(o)
+        meshes = [o for o in new if o.type == "MESH"]
+        pts = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
+        h = max(p.z for p in pts) - min(p.z for p in pts)
+        wdt = max(max(p.x for p in pts) - min(p.x for p in pts), max(p.y for p in pts) - min(p.y for p in pts))
+        coll.instance_offset = (0, 0, min(p.z for p in pts))
+        lib.append((coll, h, wdt))
+    rnd = random.Random(11)
+    parent = bpy.data.collections.new("trees_instanced")
+    bpy.context.scene.collection.children.link(parent)
+    for t in trees:
+        coll, h, wdt = lib[rnd.randrange(len(lib))]
+        e = bpy.data.objects.new("tree", None)
+        e.instance_type = "COLLECTION"
+        e.instance_collection = coll
+        e.location = (t["x"], t["y"], t["z"])
+        e.rotation_euler = (0, 0, rnd.uniform(0, 2 * math.pi))
+        sz = t["h"] / h
+        sxy = max(t["crown"] / wdt, sz * 0.6)
+        e.scale = (sxy * rnd.uniform(0.9, 1.1), sxy * rnd.uniform(0.9, 1.1), sz)
+        parent.objects.link(e)
+
+
+def setup_compositor(scene):
+    """Glare on specular highlights + aerial perspective (haze increasing with distance)."""
+    vl = scene.view_layers[0]
+    vl.use_pass_mist = True
+    w = scene.world
+    w.mist_settings.start = job.get("haze_start_m", 150.0)
+    w.mist_settings.depth = job.get("haze_depth_m", 4000.0)
+    w.mist_settings.falloff = "LINEAR"
+    scene.use_nodes = True
+    nt = scene.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    rl = nt.nodes.new("CompositorNodeRLayers")
+    glare = nt.nodes.new("CompositorNodeGlare")
+    try:
+        glare.glare_type = "FOG_GLOW"
+        glare.quality = "HIGH"
+        glare.threshold = 1.2
+        glare.mix = -0.92
+        glare.size = 8
+    except (AttributeError, TypeError):
+        pass
+    nt.links.new(rl.outputs["Image"], glare.inputs[0])
+    haze = nt.nodes.new("CompositorNodeMixRGB")
+    haze.blend_type = "MIX"
+    haze.inputs[2].default_value = tuple(job.get("haze_rgb", (0.62, 0.70, 0.80))) + (1.0,)
+    mul = nt.nodes.new("CompositorNodeMath")
+    mul.operation = "MULTIPLY"
+    mul.inputs[1].default_value = job.get("haze_amount", 0.12)
+    nt.links.new(rl.outputs["Mist"], mul.inputs[0])
+    nt.links.new(mul.outputs[0], haze.inputs[0])
+    nt.links.new(glare.outputs[0], haze.inputs[1])
+    alpha = nt.nodes.new("CompositorNodeSetAlpha")
+    nt.links.new(haze.outputs[0], alpha.inputs["Image"])
+    nt.links.new(rl.outputs["Alpha"], alpha.inputs["Alpha"])
+    comp = nt.nodes.new("CompositorNodeComposite")
+    nt.links.new(alpha.outputs[0], comp.inputs["Image"])
+
+
 def main():
     reset()
     scene = bpy.context.scene
@@ -327,6 +520,7 @@ def main():
         bpy.ops.wm.obj_import(filepath=job["obj"], forward_axis="Y", up_axis="Z")
     except AttributeError:
         bpy.ops.import_scene.obj(filepath=job["obj"], axis_forward="Y", axis_up="Z")
+    scatter_tree_models()
     mats = {name: make_material(name, p) for name, p in job["materials"].items()}
     for ob in list(scene.objects):
         if ob.type != "MESH":
@@ -345,7 +539,7 @@ def main():
                 ob.is_holdout = True
             if name.startswith("terrain") or "roads" in name or "green" in name:
                 ob.is_shadow_catcher = True
-        if "trees" in name:
+        if "trees" in name and not job.get("tree_models"):
             organic_trees(ob)
     auto_ev = None
     if job.get("sky"):
@@ -405,6 +599,8 @@ def main():
         print("AUTO_EV", vs.exposure)
     else:
         vs.exposure = job.get("exposure", 0.0)
+    if job.get("camera_fx", True):
+        setup_compositor(scene)
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGBA" if job.get("photomontage") else "RGB"
     scene.render.image_settings.color_depth = "16"

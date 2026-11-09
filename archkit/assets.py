@@ -205,3 +205,18 @@ def choose_sky(sun_el: float, blender: str, style: str = "partly_cloudy", res: s
         e_sun_target = 0.0
     return {"slug": slug, "path": str(path.resolve()), "probe": pr, "elev_mismatch_deg": round(err, 2),
             "sun_strength": e_sun_target}
+
+
+TREE_MODELS = ["island_tree_02", "tree_small_02"]
+
+
+def model_gltf(slug: str, res: str = "1k") -> Path:
+    """Download a Poly Haven glTF model (+ its buffers/textures); return the .gltf path."""
+    files = _json(f"{API}/files/{slug}")
+    g = files["gltf"][res]["gltf"]
+    root = PH_DIR / "models" / f"{slug}_{res}"
+    main = _download(g["url"], root / Path(g["url"]).name)
+    jobs = [(inc["url"], root / rel) for rel, inc in g.get("include", {}).items()]
+    with ThreadPoolExecutor(6) as ex:
+        list(ex.map(lambda j: _download(*j), jobs))
+    return main
