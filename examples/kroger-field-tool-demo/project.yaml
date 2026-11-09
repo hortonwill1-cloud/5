@@ -76,8 +76,8 @@ views:
     resolution: [3840, 2160]
     samples: 256
   - name: approach
-    eye: [708.2, -572.1, 5.5]    # SE lots, ~280 m from field centre (clear of buildings and trees)
-    target: [145.2, -77.0, 45]
+    eye: [708.2, -572.1, 300]    # drone view: no clear ground-level sightline to this end within 330 m (stadium + Nutter Field House)
+    target: [145.2, -77.0, 30]
     focal_mm: 24
     datetime: "2026-09-12T11:00:00"
     resolution: [3840, 2160]

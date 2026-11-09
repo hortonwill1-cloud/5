@@ -60,7 +60,36 @@ def view_camera(project: Project, ctx: SiteContext | None, v: View) -> tuple[Cam
     gz = (lambda x, y: ctx.ground_z(x, y)) if ctx is not None else (lambda x, y: 0.0)
     eye = (v.eye[0], v.eye[1], gz(v.eye[0], v.eye[1]) + v.eye[2])
     tgt = (v.target[0], v.target[1], gz(v.target[0], v.target[1]) + v.target[2])
+    if ctx is not None:
+        blk = sightline_blockers(ctx, eye, tgt)
+        if blk:
+            info["occluded_by"] = blk
+            print(f"  WARNING view {v.name!r}: line of sight to target blocked by {', '.join(blk)} "
+                  "- raise the eye or move it")
     return look_at(eye, tgt, v.focal_mm, v.sensor_mm, *v.resolution), info
+
+
+def sightline_blockers(ctx: SiteContext, eye, tgt, step: float = 2.0) -> list[str]:
+    """Existing buildings that cut the straight line from eye to target (measured heights)."""
+    from shapely.geometry import LineString, Point
+
+    line = LineString([eye[:2], tgt[:2]])
+    L = line.length
+    out = []
+    for f in ctx.of("building") + ctx.of("building_part"):
+        if not f.geom.intersects(line) or f.geom.contains(Point(tgt[:2])):
+            continue
+        seg = f.geom.intersection(line)
+        top = f.props.get("ground_z", 0.0) + f.height
+        for d in np.arange(0, L, step):
+            p = line.interpolate(d)
+            if seg.distance(p) > 1e-6:
+                continue
+            z_line = eye[2] + (tgt[2] - eye[2]) * d / L
+            if top > z_line + 0.5:
+                out.append(f.props.get("name") or f.props.get("building") or f"OSM {f.props.get('osm_id')}")
+                break
+    return out
 
 
 def sun_for(project: Project, v: View) -> tuple[float, float]:
