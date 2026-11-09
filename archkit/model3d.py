@@ -155,6 +155,10 @@ def add_wall(m: Model, b: Building, level: Level, wall: Wall, z_base: float, mat
         ext0 = t / 2 if (wall.closed or si > 0) else 0.0
         ext1 = -t / 2 if (wall.closed or si < len(segs) - 1) else 0.0
         ops = wall_openings(level, wall, si)
+        out_sign = 0
+        if wall.exterior and wall.closed:
+            mid = a + u_local * L / 2 + n_local * (t + 0.05)
+            out_sign = -1 if Polygon(wall.path).contains(Point(*mid)) else 1
         cursor = -ext0
         for o in ops:
             s0, s1 = o.offset, o.offset + o.width
@@ -164,6 +168,12 @@ def add_wall(m: Model, b: Building, level: Level, wall: Wall, z_base: float, mat
             add_box_along(m, A, u, n, s0, s1, -t / 2, t / 2, z_base + o.sill + o.height,
                           z_base + height, mat, grp)
             _add_opening_fill(m, A, u, n, o, t, z_base, level, mats)
+            if out_sign and o.kind == "window" and o.sill > 0.1:
+                # projecting sill with drip: casts the shadow line real facades have
+                w_in, w_out = out_sign * (t / 2 - 0.02), out_sign * (t / 2 + 0.055)
+                add_box_along(m, A, u, n, s0 - 0.04, s1 + 0.04, min(w_in, w_out), max(w_in, w_out),
+                              z_base + o.sill - 0.05, z_base + o.sill, mats.get("sill", "concrete"),
+                              f"{level.name}/openings")
             cursor = s1
         add_box_along(m, A, u, n, cursor, L + ext1, -t / 2, t / 2, z_base, z_base + height, mat, grp)
 
