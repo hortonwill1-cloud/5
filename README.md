@@ -38,7 +38,11 @@ Outputs land in `examples/platt-park-infill/out/`:
 * **Stadium tools**: C-value seating-bowl solver, IBC §1029 egress, seat counts, NCAA field.
 
 Examples: `examples/platt-park-infill` (Denver infill house) and
-`examples/kroger-field-renovation` (Kroger Field end-zone concept, Lexington KY).
+`examples/kroger-field-tool-demo` (stadium tools exercised on Kroger Field's real existing
+conditions; the seating sections are test inputs, **not** a renovation proposal).
+
+archkit is a reference and analysis tool: it measures existing conditions and checks,
+draws and renders the design *you* specify. It does not author or replace your plans.
 
 ## Accuracy
 

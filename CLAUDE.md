@@ -4,6 +4,23 @@ This repo is a toolkit for **site-coordinated architectural deliverables**:
 a single YAML spec → real-world site context → coordination/code checks →
 true-scale drawing set (PDF + DXF) → 3D model (OBJ) → photoreal renders (Blender Cycles).
 
+## Role of this toolkit — reference, not author (read first)
+
+The user has their own renovation/design work (e.g. a Kroger Field stadium renovation
+drafted in a separate project folder). **Their drafts are the authoritative plan.**
+archkit is a tool, resource and reference: it measures existing conditions, checks,
+visualises and documents *what the user specifies*.
+
+- Never overwrite, restructure or "improve" the user's own project files or plan. If asked
+  to work with them, read them, and write archkit outputs to a separate folder (e.g.
+  `<their project>/archkit-out/`) unless the user explicitly says otherwise.
+- Do not invent design decisions (seat counts, section geometry, programme) and present
+  them as the plan. When an analysis needs a parameter the user hasn't given, ask, or show
+  clearly-labelled options.
+- Report findings (code checks, sightlines, clashes with existing conditions) as input for
+  the user's decisions, not as changes to their design.
+- `examples/` are demonstrations of the tools only.
+
 ## Setup (fresh container)
 
 ```bash
@@ -53,7 +70,7 @@ final: `--percent 100 --samples 256+` (4K textures/HDRI are used at 100%).
 
 ## Stadiums / assembly seating
 
-`stadium:` block (see `examples/kroger-field-renovation/project.yaml`): field auto-posed from
+`stadium:` block (see `examples/kroger-field-tool-demo/project.yaml`): field auto-posed from
 the OSM pitch inside the stadium; `sections` solved with the C-value method
 (`archkit/stadium.py`), IBC §1029 egress checks (aisle widths/capacity, seats between
 aisles, risers, travel), seat counts, S-series sightline sheets, field + stand models.

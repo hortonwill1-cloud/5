@@ -5,16 +5,18 @@
 # and 700+ trees.  The playing field pose is detected from the OSM pitch polygon
 # "C.M. Newton Grounds" (long axis bearing ≈ 301°/121°, i.e. WNW–ESE).
 #
-# The DESIGN below is a hypothetical illustration of the tools (not UK Athletics' plans):
-# replace the ESE end-zone stands with a 40-row lower bowl + 24-row upper tier,
-# solved for a 90 mm C-value, with IBC §1029 egress checks and seat counts.
+# TOOL DEMONSTRATION ONLY — NOT A RENOVATION PLAN.  The seating sections below are
+# arbitrary test inputs that exercise the sightline / egress / seat-count / rendering
+# tools.  They do not represent, and must not replace, the owner's or the user's actual
+# renovation design.  To analyse a real proposal, copy this file and replace the
+# `stadium.sections` with the designer's own parameters.
 #
 # Stadium section `side`: the field's long axis is canonicalised to point into the
 # northern half-plane (here: WNW).  north = end zone ahead of the axis, south = behind
 # it; west = left side of the axis, east = right side.  All lengths in feet.
 
 project:
-  name: Kroger Field ESE End Zone Renovation (example)
+  name: Kroger Field — archkit Tool Demo (not a design proposal)
   number: "2026-UK-01"
   client: Example — University of Kentucky Athletics
   architect: archkit Studio
@@ -83,7 +85,8 @@ views:
 
 sheet:
   size: ARCH-D
-  issue: CONCEPT
+  issue: TOOL DEMONSTRATION
   notes:
-    - "Hypothetical design for demonstration; existing conditions from OSM + USGS LiDAR."
+    - "TOOL DEMONSTRATION ONLY - sections are test inputs, not a renovation proposal."
+    - "Existing conditions from OSM + USGS LiDAR."
     - "Obtain stadium as-builts / point-cloud survey before design development."

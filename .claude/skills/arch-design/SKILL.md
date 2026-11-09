@@ -5,7 +5,14 @@ description: Produce professional architectural deliverables coordinated with re
 
 # Architectural design with archkit
 
-Follow `CLAUDE.md` (setup, workflow, accuracy rules). Summary of the loop:
+Follow `CLAUDE.md` (setup, workflow, accuracy rules).
+
+**The user's own plans are authoritative.** For their projects (e.g. their Kroger Field
+renovation), use archkit to model existing conditions, test and visualise *their* design
+parameters, and report findings. Never overwrite their files or substitute archkit's
+example designs for their plan; write outputs to a separate folder.
+
+Summary of the loop:
 
 1. **Locate & gather**: `archkit locate "<address>"`; copy
    `examples/platt-park-infill/project.yaml` to `projects/<slug>/project.yaml`; set
@@ -14,7 +21,7 @@ Follow `CLAUDE.md` (setup, workflow, accuracy rules). Summary of the loop:
    Ask the user for the zoning numbers if you cannot verify them; never invent them silently.
 2. **Context**: set `site.lidar: {spacing_m: 0.5}` for US sites, then
    `archkit site projects/<slug>/project.yaml`; read the counts and sources.
-   Stadium/arena work: add a `stadium:` block (copy `examples/kroger-field-renovation`).
+   Stadium/arena work: add a `stadium:` block (copy the `stadium:` block structure from `examples/kroger-field-tool-demo` and fill in the user's own parameters).
 3. **Design** in the spec: exterior wall rectangle(s), interior walls, openings
    (offset from segment start), rooms with `use`, stairs (risers × riser = floor-to-floor),
    roof, materials (see `archkit/materials.py`).
