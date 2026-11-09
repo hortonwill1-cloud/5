@@ -23,8 +23,20 @@ def site_plan(project: Project, ctx: SiteContext | None, extent: float | None = 
     dr = Drawing()
     b = project.building
     sysu = project.system
-    fp = b.to_site(b.footprint())
+    fp = b.to_site(b.footprint()) if b is not None else None
+    stad_polys, fieldg, secs = [], None, []
+    if project.stadium:
+        from .. import stadium as st
+        fieldg, secs = st.from_spec(project, ctx)
+        if fieldg is not None:
+            stad_polys = [st.bowl_polygon(fieldg, s_) for s_ in secs]
+    if fp is None:
+        from shapely.ops import unary_union as _uu
+        fp = _uu(stad_polys) if stad_polys else Point(0, 0).buffer(1)
     focus = project.parcel if project.parcel is not None else fp
+    if fieldg is not None:
+        focus = unary_union([focus, fieldg.to_site(box(-fieldg.length / 2, -fieldg.width / 2,
+                                                       fieldg.length / 2, fieldg.width / 2))] + stad_polys)
     if extent is None:
         minx, miny, maxx, maxy = focus.bounds
         extent = max(maxx - minx, maxy - miny) * 0.5 + 25
@@ -66,7 +78,7 @@ def site_plan(project: Project, ctx: SiteContext | None, extent: float | None = 
                 dr.text((p.x, p.y), nm.upper(), h_mm=2.5, rot=ang, weight="bold", z=6)
         for f in ctx.of("building"):
             g = f.geom.intersection(clip)
-            if g.is_empty or g.intersects(fp):
+            if g.is_empty or (b is not None and g.intersects(fp)):
                 continue
             dr.shape(g, "C-BLDG-EXST-PATT", fill="#ececec", edge=True, z=3, lw=0.35)
             if g.area > 60:
@@ -107,6 +119,22 @@ def site_plan(project: Project, ctx: SiteContext | None, extent: float | None = 
                 if ang > 90 or ang < -90:
                     ang += 180
                 dr.text(mid, fmt_len(d, sysu), h_mm=2.0, rot=ang, va="bottom", z=8)
+    if fieldg is not None:
+        for mat, poly in fieldg.markings():
+            if mat in ("turf_dark",):
+                dr.shape(poly, "L-PLNT-PATT", fill="#d9ead3", edge=False, z=8)
+            elif mat == "endzone":
+                dr.shape(poly, "L-PLNT-PATT", fill="#c9d7ea", edge=False, z=8)
+            elif mat == "paint_white" and poly.area > 5:
+                dr.shape(poly, "A-ANNO-SYMB", fill="#ffffff", edge=False, z=8)
+        for s_, poly in zip(secs, stad_polys):
+            dr.shape(poly, "A-BLDG-PROP-PATT", fill="#8fa8c8", edge=True, z=9, lw=0.7)
+            c = poly.representative_point()
+            n = s_.seats()["total"]
+            dr.text((c.x, c.y), f"{s_.name.upper()}\n{s_.rows} ROWS · {n:,} SEATS", h_mm=2.2,
+                    weight="bold", z=10)
+    if b is None:
+        return dr
     # proposed building
     dr.shape(fp, "A-BLDG-PROP-PATT", fill="#9e9e9e", edge=True, z=9, lw=0.7)
     if b.roof.overhang > 0:

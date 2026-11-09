@@ -49,13 +49,27 @@ def shadow_study(project: Project, ctx: SiteContext | None, out, tz: float | Non
         tz = project.views[0].utc_offset_h if project.views else guess_utc_offset(project.lon)
     tzinfo = local_tz(project.timezone if tz is None else None, tz)
     b = project.building
-    fp = b.to_site(b.footprint())
-    ff = resolve_finish_floor(project, ctx)
-    h = ff + b.roof_peak() - (ctx.ground_z(fp.centroid.x, fp.centroid.y) if ctx else 0)
-    h_eave = ff + b.top_of_wall()
+    proposals = []   # (footprint, height above grade)
+    if b is not None:
+        fp = b.to_site(b.footprint())
+        ff = resolve_finish_floor(project, ctx)
+        h = ff + b.roof_peak() - (ctx.ground_z(fp.centroid.x, fp.centroid.y) if ctx else 0)
+        h_eave = ff + b.top_of_wall()
+    if project.stadium:
+        from . import stadium as st
+        from .model3d import apply_clips
+        if ctx is not None:
+            apply_clips(project, ctx)
+        fieldg, secs = st.from_spec(project, ctx)
+        for s_ in secs:
+            proposals.append((st.bowl_polygon(fieldg, s_), s_.rows_data[-1]["tread_z"] + 1.1))
+    if b is None:
+        from shapely.ops import unary_union as _uu
+        fp = _uu([p for p, _ in proposals])
+        h = h_eave = max(hh for _, hh in proposals)
     focus = project.parcel if project.parcel is not None else fp
     c = focus.centroid
-    R = 60.0
+    R = 60.0 if b is not None else max(120.0, max(fp.bounds[2] - fp.bounds[0], fp.bounds[3] - fp.bounds[1]))
     clip = box(c.x - R, c.y - R, c.x + R, c.y + R)
     sh = Sheet(project, "A9.0", "Shadow Study")
     x0, y0, W, H = sh.area
@@ -79,10 +93,16 @@ def shadow_study(project: Project, ctx: SiteContext | None, out, tz: float | Non
                         exist_sh.append(s)
                     dr.shape(f.geom.intersection(clip), "C-BLDG-EXST-PATT", fill="#ffffff", z=4, lw=0.25)
             # proposed: pitched roofs approximated by eave prism + ridge-height prism of a narrowed footprint
-            s = prism_shadow(fp, 0, h_eave if b.roof.type != "flat" else h, az, el)
-            if s is not None:
-                new_sh.append(s)
-            if b.roof.type in ("gable", "hip"):
+            if b is None:
+                for pp, hh in proposals:
+                    s = prism_shadow(pp, 0, hh, az, el)
+                    if s is not None:
+                        new_sh.append(s)
+            else:
+                s = prism_shadow(fp, 0, h_eave if b.roof.type != "flat" else h, az, el)
+                if s is not None:
+                    new_sh.append(s)
+            if b is not None and b.roof.type in ("gable", "hip"):
                 core = fp.buffer(-min(fp.bounds[2] - fp.bounds[0], fp.bounds[3] - fp.bounds[1]) * 0.35)
                 if not core.is_empty:
                     s2 = prism_shadow(core, 0, h, az, el)

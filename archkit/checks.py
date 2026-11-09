@@ -132,6 +132,30 @@ def setback_envelope(project: Project, ctx: SiteContext | None) -> tuple[Polygon
     return env, labels
 
 
+def _provenance(project: Project, ctx: SiteContext | None) -> list[Finding]:
+    out = []
+    if ctx is not None:
+        blds = ctx.of("building")
+        est_b = [f for f in blds if "ESTIMATED" in f.props.get("height_source", "")]
+        lid = [f for f in blds if f.props.get("height_source", "").startswith("LiDAR")]
+        if lid:
+            out.append(Finding("INFO", "data", "context building heights measured (LiDAR)",
+                               f"{len(lid)}/{len(blds)}", "-"))
+        if est_b:
+            out.append(Finding("INFO", "data", "context building heights estimated",
+                               f"{len(est_b)}/{len(blds)}", "tagged heights, LiDAR or survey",
+                               "verify by site visit / LiDAR before publishing views"))
+        if ctx.elevation:
+            out.append(Finding("INFO", "data", "terrain source", ctx.elevation["source"], "-"))
+        else:
+            out.append(Finding("WARN", "data", "terrain", "flat-site assumption", "DEM or topo survey"))
+    src = project.parcel_source.lower()
+    authoritative = ("survey" in src or "gis" in src or "parcel" in src) and "approx" not in src
+    out.append(Finding("INFO" if authoritative else "WARN", "data", "parcel boundary source",
+                       project.parcel_source, "boundary survey for permit documents"))
+    return out
+
+
 def run_checks(project: Project, ctx: SiteContext | None) -> list[Finding]:
     from .model3d import resolve_finish_floor
 
@@ -140,26 +164,20 @@ def run_checks(project: Project, ctx: SiteContext | None) -> list[Finding]:
     L = lambda v: fmt_len(v, sysu)  # noqa: E731
     A = lambda v: fmt_area(v, sysu)  # noqa: E731
     b = project.building
+    rules = _rules(project)
+    if b is None:
+        out += _provenance(project, ctx)
+        if project.stadium:
+            from .stadium import stadium_checks
+            out += stadium_checks(project, ctx)
+        return out
     fp_local = b.footprint()
     fp = b.to_site(fp_local)
-    rules = _rules(project)
 
-    # ---------------- data provenance -------------------------------------
-    if ctx is not None:
-        est_b = [f for f in ctx.of("building") if "ESTIMATED" in f.props.get("height_source", "")]
-        if est_b:
-            out.append(Finding("INFO", "data", "context building heights estimated",
-                               f"{len(est_b)}/{len(ctx.of('building'))}", "tagged heights or survey",
-                               "verify by site visit / LiDAR before publishing views"))
-        if ctx.elevation:
-            out.append(Finding("INFO", "data", "terrain source", ctx.elevation["source"], "-"))
-        else:
-            out.append(Finding("WARN", "data", "terrain", "flat-site assumption", "DEM or topo survey"))
-    src = project.parcel_source.lower()
-    authoritative = ("survey" in src or "gis" in src or "parcel" in src) and "approx" not in src
-    out.append(Finding("INFO" if authoritative else "WARN", "data",
-                       "parcel boundary source", project.parcel_source,
-                       "boundary survey for permit documents"))
+    out += _provenance(project, ctx)
+    if project.stadium:
+        from .stadium import stadium_checks
+        out += stadium_checks(project, ctx)
 
     # ---------------- model sanity ----------------------------------------
     for lv in b.levels:

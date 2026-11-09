@@ -48,6 +48,14 @@ LIB: dict[str, dict] = {
     "tree_crown":    {"base": (0.045, 0.11, 0.025), "rough": 0.85, "sss": 0.15, "noise": 0.25, "bump": 0.8},
     "tree_trunk":    {"base": (0.15, 0.10, 0.07), "rough": 0.9},
     "rail":          {"base": (0.25, 0.22, 0.20), "rough": 0.9},
+    # --- stadium -----------------------------------------------------------
+    "seat_blue":     {"base": (0.0, 0.035, 0.33), "rough": 0.45},          # Kentucky blue PMS 286
+    "seat_white":    {"base": (0.75, 0.75, 0.75), "rough": 0.45},
+    "turf_dark":     {"base": (0.035, 0.11, 0.03), "rough": 0.8, "noise": 0.08, "bump": 0.3},
+    "turf_light":    {"base": (0.055, 0.15, 0.04), "rough": 0.8, "noise": 0.08, "bump": 0.3},
+    "endzone":       {"base": (0.0, 0.035, 0.30), "rough": 0.8, "noise": 0.06},
+    "paint_white":   {"base": (0.80, 0.80, 0.78), "rough": 0.7},
+    "track":         {"base": (0.35, 0.08, 0.05), "rough": 0.8},
 }
 
 

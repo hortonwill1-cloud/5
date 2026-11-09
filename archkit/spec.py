@@ -212,6 +212,14 @@ class Project:
     elevation_source: str = "auto"
     timezone: str | None = None   # IANA name, e.g. America/Denver (DST-aware)
     lidar: dict | None = None     # {spacing_m: 0.5, project: <EPT name>} -> measured context
+    stadium: dict | None = None   # parsed by archkit.stadium.from_spec
+
+    @property
+    def materials(self) -> dict:
+        if self.building is not None:
+            return self.building.materials
+        return (self.stadium or {}).get("materials", {})
+    clip_context: list = field(default_factory=list)  # polygons (site m) removed from context
 
 
 def _len(v, k):
@@ -257,60 +265,63 @@ def load(path: str | Path) -> Project:
         parcel = ("geojson", str((path.parent / pd["geojson"]).resolve()))
         parcel_src = pd.get("source", pd["geojson"])
 
-    b = d["building"]
-    levels = []
-    for lv in b["levels"]:
-        walls = []
-        for w in lv.get("walls", []):
-            walls.append(Wall(
-                id=str(w["id"]), path=_pts(w["path"], k), thickness=float(w["thickness"]) * k,
-                closed=bool(w.get("closed", False)), exterior=bool(w.get("exterior", False)),
-                height=_len(w.get("height"), k), material=w.get("material",
-                                                               "facade" if w.get("exterior") else "plaster"),
-                fire_rating_hr=float(w.get("fire_rating_hr", 0))))
-        ops = []
-        for o in lv.get("openings", []):
-            kind = o.get("kind", "window")
-            ops.append(Opening(
-                kind=kind, wall=str(o["wall"]), segment=int(o.get("segment", 0)),
-                offset=float(o["offset"]) * k, width=float(o["width"]) * k,
-                height=float(o.get("height", 6.6667 if units == "ft" else 2.03)) * k,
-                sill=float(o.get("sill", 0 if kind in ("door", "garage_door") else
-                                 (3.0 if units == "ft" else 0.9))) * k,
-                tag=str(o.get("tag", "")), swing=o.get("swing", "in-left"),
-                egress=bool(o.get("egress", False)), operable=bool(o.get("operable", True))))
-        rooms = [Room(str(r["name"]), str(r.get("number", "")), _pts(r["polygon"], k),
-                      r.get("use", "habitable"), r.get("finish", "")) for r in lv.get("rooms", [])]
-        stairs = [Stair(tuple(_pts([s["start"]], k)[0]), float(s.get("direction_deg", 0)),
-                        float(s["width"]) * k, int(s["risers"]), float(s["riser"]) * k,
-                        float(s["tread"]) * k) for s in lv.get("stairs", [])]
-        levels.append(Level(
-            name=lv["name"], elevation=float(lv.get("elevation", 0)) * k,
-            floor_to_floor=float(lv["floor_to_floor"]) * k,
-            ceiling=float(lv.get("ceiling", lv["floor_to_floor"])) * k,
-            slab=float(lv.get("slab", 1.0 if units == "ft" else 0.3)) * k,
-            walls=walls, openings=ops, rooms=rooms, stairs=stairs))
-    # Upper levels inherit exterior wall if omitted.
-    for i, lv in enumerate(levels[1:], 1):
-        if not any(w.exterior for w in lv.walls):
-            for w in levels[i - 1].walls:
-                if w.exterior:
-                    lv.walls.insert(0, Wall(w.id, list(w.path), w.thickness, w.closed, True,
-                                            None, w.material, w.fire_rating_hr))
-    r = b.get("roof", {})
-    roof = Roof(type=r.get("type", "flat"), pitch=_pitch(r.get("pitch")),
-                overhang=float(r.get("overhang", 0)) * k, parapet=float(r.get("parapet", 0)) * k,
-                thickness=float(r.get("thickness", 1.0 if units == "ft" else 0.3)) * k,
-                ridge_axis=r.get("ridge_axis", "auto"), material=r.get("material", "roof_membrane"))
-    pl = b.get("placement", {})
-    building = Building(
-        placement=(float(pl.get("x", 0)) * k, float(pl.get("y", 0)) * k),
-        rotation_deg=float(pl.get("rotation_deg", 0)), levels=levels, roof=roof,
-        finish_floor_elev=(None if str(b.get("finish_floor", "auto")) == "auto"
-                           else float(b["finish_floor"]) * k),
-        materials=b.get("materials", {}), occupancy=b.get("occupancy", "R-3"),
-        construction_type=b.get("construction_type", "V-B"),
-        sprinklered=bool(b.get("sprinklered", False)))
+    building = None
+    if d.get("building"):
+        b = d["building"]
+        levels = []
+        for lv in b["levels"]:
+            walls = []
+            for w in lv.get("walls", []):
+                walls.append(Wall(
+                    id=str(w["id"]), path=_pts(w["path"], k), thickness=float(w["thickness"]) * k,
+                    closed=bool(w.get("closed", False)), exterior=bool(w.get("exterior", False)),
+                    height=_len(w.get("height"), k), material=w.get("material",
+                                                                   "facade" if w.get("exterior") else "plaster"),
+                    fire_rating_hr=float(w.get("fire_rating_hr", 0))))
+            ops = []
+            for o in lv.get("openings", []):
+                kind = o.get("kind", "window")
+                ops.append(Opening(
+                    kind=kind, wall=str(o["wall"]), segment=int(o.get("segment", 0)),
+                    offset=float(o["offset"]) * k, width=float(o["width"]) * k,
+                    height=float(o.get("height", 6.6667 if units == "ft" else 2.03)) * k,
+                    sill=float(o.get("sill", 0 if kind in ("door", "garage_door") else
+                                     (3.0 if units == "ft" else 0.9))) * k,
+                    tag=str(o.get("tag", "")), swing=o.get("swing", "in-left"),
+                    egress=bool(o.get("egress", False)), operable=bool(o.get("operable", True))))
+            rooms = [Room(str(r["name"]), str(r.get("number", "")), _pts(r["polygon"], k),
+                          r.get("use", "habitable"), r.get("finish", "")) for r in lv.get("rooms", [])]
+            stairs = [Stair(tuple(_pts([s["start"]], k)[0]), float(s.get("direction_deg", 0)),
+                            float(s["width"]) * k, int(s["risers"]), float(s["riser"]) * k,
+                            float(s["tread"]) * k) for s in lv.get("stairs", [])]
+            levels.append(Level(
+                name=lv["name"], elevation=float(lv.get("elevation", 0)) * k,
+                floor_to_floor=float(lv["floor_to_floor"]) * k,
+                ceiling=float(lv.get("ceiling", lv["floor_to_floor"])) * k,
+                slab=float(lv.get("slab", 1.0 if units == "ft" else 0.3)) * k,
+                walls=walls, openings=ops, rooms=rooms, stairs=stairs))
+        # Upper levels inherit exterior wall if omitted.
+        for i, lv in enumerate(levels[1:], 1):
+            if not any(w.exterior for w in lv.walls):
+                for w in levels[i - 1].walls:
+                    if w.exterior:
+                        lv.walls.insert(0, Wall(w.id, list(w.path), w.thickness, w.closed, True,
+                                                None, w.material, w.fire_rating_hr))
+        r = b.get("roof", {})
+        roof = Roof(type=r.get("type", "flat"), pitch=_pitch(r.get("pitch")),
+                    overhang=float(r.get("overhang", 0)) * k, parapet=float(r.get("parapet", 0)) * k,
+                    thickness=float(r.get("thickness", 1.0 if units == "ft" else 0.3)) * k,
+                    ridge_axis=r.get("ridge_axis", "auto"), material=r.get("material", "roof_membrane"))
+        pl = b.get("placement", {})
+        building = Building(
+            placement=(float(pl.get("x", 0)) * k, float(pl.get("y", 0)) * k),
+            rotation_deg=float(pl.get("rotation_deg", 0)), levels=levels, roof=roof,
+            finish_floor_elev=(None if str(b.get("finish_floor", "auto")) == "auto"
+                               else float(b["finish_floor"]) * k),
+            materials=b.get("materials", {}), occupancy=b.get("occupancy", "R-3"),
+            construction_type=b.get("construction_type", "V-B"),
+            sprinklered=bool(b.get("sprinklered", False)))
+
 
     views = []
     for v in d.get("views", []):
@@ -352,7 +363,9 @@ def load(path: str | Path) -> Project:
         elevation_source=site.get("elevation_source", "auto"),
         timezone=site.get("timezone"),
         lidar=(dict(site["lidar"]) if isinstance(site.get("lidar"), dict)
-               else ({} if site.get("lidar") else None)))
+               else ({} if site.get("lidar") else None)),
+        stadium=d.get("stadium"),
+        clip_context=[Polygon(_pts(c["local"], k)) for c in site.get("clip_context", [])])
 
 
 def resolve_parcel(project: Project, frame) -> None:

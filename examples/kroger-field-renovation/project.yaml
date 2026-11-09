@@ -1,0 +1,89 @@
+# archkit — stadium renovation example on a REAL site: Kroger Field, Lexington KY.
+#
+# Context is measured: OpenStreetMap footprints + USGS 3DEP LiDAR (KY_Eastern_B1_2019,
+# ~2.5 M returns within 350 m) for the existing stadium bowl, campus buildings, terrain
+# and 700+ trees.  The playing field pose is detected from the OSM pitch polygon
+# "C.M. Newton Grounds" (long axis bearing ≈ 301°/121°, i.e. WNW–ESE).
+#
+# The DESIGN below is a hypothetical illustration of the tools (not UK Athletics' plans):
+# replace the ESE end-zone stands with a 40-row lower bowl + 24-row upper tier,
+# solved for a 90 mm C-value, with IBC §1029 egress checks and seat counts.
+#
+# Stadium section `side`: the field's long axis is canonicalised to point into the
+# northern half-plane (here: WNW).  north = end zone ahead of the axis, south = behind
+# it; west = left side of the axis, east = right side.  All lengths in feet.
+
+project:
+  name: Kroger Field ESE End Zone Renovation (example)
+  number: "2026-UK-01"
+  client: Example — University of Kentucky Athletics
+  architect: archkit Studio
+  units: ft
+
+site:
+  address: Kroger Field, 1540 University Dr, Lexington, KY 40506
+  location: {lat: 38.0227349, lon: -84.5051192}
+  timezone: America/New_York
+  context_radius_m: 350
+  lidar: {spacing_m: 0.6}
+
+code:
+  profile: IBC-2021         # Kentucky Building Code is based on the IBC; verify edition/amendments
+
+stadium:
+  field: auto               # or {center: [x, y], axis_deg: a}
+  outdoor: true             # IBC 1029.6.3 outdoor smoke-protected assembly
+  occupants_total: 61000    # whole-venue load used for capacity factors
+  sections:
+    - name: ESE Lower Bowl
+      side: south
+      first_row_offset: 30    # end line -> row-1 eye (team area + clear zone)
+      first_row_height: 6     # row-1 tread above field (sightline over sideline activity)
+      rows: 40
+      tread: 2.75             # 33"
+      c_target_mm: 90
+      riser_increment_mm: 10
+      length: 160             # sideline to sideline
+      aisle_width: 4
+      aisle_spacing: 30       # 6 aisles: egress capacity (5 aisles failed IBC 1029.6.3 by 2.1 ft)
+      seat_width: 1.667       # 20"
+    - name: ESE Upper Tier
+      side: south
+      first_row_offset: 145
+      first_row_height: 62
+      rows: 24
+      tread: 2.92             # 35" (premium)
+      c_target_mm: 90
+      length: 200
+      aisle_width: 4
+      seat_width: 1.75
+
+views:
+  - name: aerial
+    eye: [924.4, -89.3, 420]
+    target: [103.1, -51.4, 20]
+    focal_mm: 35
+    datetime: "2026-09-12T15:30:00"   # early-season afternoon kickoff
+    resolution: [3840, 2160]
+    samples: 256
+  - name: fan-view
+    eye: [-150.7, -185.2, 95]
+    target: [215.3, -119.5, 25]
+    focal_mm: 24
+    datetime: "2026-09-12T15:30:00"
+    resolution: [3840, 2160]
+    samples: 256
+  - name: approach
+    eye: [483.8, -436.0, 5.5]
+    target: [215.3, -119.5, 40]
+    focal_mm: 24
+    datetime: "2026-09-12T11:00:00"
+    resolution: [3840, 2160]
+    samples: 256
+
+sheet:
+  size: ARCH-D
+  issue: CONCEPT
+  notes:
+    - "Hypothetical design for demonstration; existing conditions from OSM + USGS LiDAR."
+    - "Obtain stadium as-builts / point-cloud survey before design development."

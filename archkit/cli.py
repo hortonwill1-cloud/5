@@ -55,7 +55,7 @@ def load_all(path: str, args, need_ctx: bool = True):
             ctx = SiteContext(LocalFrame(project.lat, project.lon), project.context_radius)
         spec_mod.resolve_parcel(project, ctx.frame)
         parcels = [f for f in ctx.features if f.kind == "parcel" and f.source != "osm"]
-        if project.parcel is None and parcels:
+        if project.parcel is None and parcels and project.building is not None:
             from shapely.geometry import Point
             hit = [f for f in parcels if f.geom.contains(Point(*project.building.placement))]
             if hit:
@@ -103,7 +103,7 @@ def cmd_model(args):
     from .model3d import export_obj, full_model
     project, ctx, out = load_all(args.project, args)
     m = full_model(project, ctx)
-    p = export_obj(m, out / "model" / "scene.obj", project.building.materials)
+    p = export_obj(m, out / "model" / "scene.obj", project.materials)
     print(f"{len(m.faces)} faces -> {p}")
 
 

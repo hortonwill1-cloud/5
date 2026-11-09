@@ -34,6 +34,8 @@ ROAD_WIDTH_M = {
     "primary_link": 6.0, "secondary_link": 6.0, "tertiary_link": 6.0,
 }
 LANE_WIDTH_M = 3.35  # ~11 ft
+GREEN_LANDUSE = {"grass", "forest", "meadow", "recreation_ground", "village_green", "cemetery"}
+GREEN_LEISURE = {"park", "garden", "pitch", "stadium", "golf_course", "playground", "sports_centre"}
 LEVEL_HEIGHT_M = 3.2
 
 
@@ -289,11 +291,14 @@ def parse_osm(data: dict, frame: LocalFrame) -> list[Feature]:
                 feats.append(Feature("water", poly, {"osm_id": el["id"]}))
         elif "waterway" in tags:
             feats.append(Feature("waterway", LineString(pts), {"osm_id": el["id"]}))
-        elif closed:
+        elif closed and (tags.get("landuse") in GREEN_LANDUSE or tags.get("leisure") in GREEN_LEISURE
+                         or tags.get("natural") in ("wood", "grassland", "scrub")):
             poly = _closed_ring(pts)
             if poly is not None:
-                feats.append(Feature("green", poly, {"osm_id": el["id"],
-                                     "use": tags.get("landuse") or tags.get("leisure")}))
+                feats.append(Feature("green", poly, {
+                    "osm_id": el["id"], "use": tags.get("leisure") or tags.get("landuse") or tags.get("natural"),
+                    "sport": tags.get("sport", ""), "name": tags.get("name", ""),
+                    "surface": tags.get("surface", "")}))
     return feats
 
 

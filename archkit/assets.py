@@ -33,7 +33,7 @@ TEXTURES: dict[str, dict] = {
     "stucco_white":  {"slug": "white_stucco"},
     "facade":        {"slug": "white_stucco"},
     "plaster":       {"slug": "painted_plaster_wall"},
-    "concrete":      {"slug": "concrete_wall_006", "mult": (1.15, 1.15, 1.2)},
+    "concrete":      {"slug": "concrete_wall_008", "recolor": (0.56, 0.56, 0.54)},
     "board_formed":  {"slug": "concrete_wall_008", "recolor": (0.42, 0.41, 0.40)},
     "fiber_cement":  {"slug": "exterior_wall_cladding_03"},
     "wood_cedar":    {"slug": "weathered_plank_siding"},

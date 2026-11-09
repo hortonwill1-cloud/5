@@ -26,6 +26,10 @@ def build_set(project: Project, ctx: SiteContext | None, outdir: str | Path,
     b = project.building
     georef = {"lat": project.lat, "lon": project.lon} if project.lat is not None else None
 
+    if ctx is not None:
+        from ..model3d import apply_clips
+        apply_clips(project, ctx)   # existing construction removed by the proposal
+
     # ---- C1.0 site plan --------------------------------------------------
     sp = site_plan(project, ctx)
     sh = Sheet(project, "C1.0", "Site Plan")
@@ -38,6 +42,11 @@ def build_set(project: Project, ctx: SiteContext | None, outdir: str | Path,
     write_dxf(sp, outdir / "dxf" / "C1.0-site-plan.dxf", project.units, SCALES[scale],
               project.name, georef)
     produced["dxf"].append("dxf/C1.0-site-plan.dxf")
+
+    if project.stadium:
+        _stadium_sheets(project, ctx, outdir, sheets, produced)
+    if b is None:
+        return _finish(project, outdir, sheets, produced)
 
     # ---- A1.x floor plans --------------------------------------------------
     for i, lv in enumerate(b.levels):
@@ -87,7 +96,43 @@ def build_set(project: Project, ctx: SiteContext | None, outdir: str | Path,
         produced["dxf"].append(f"dxf/{fn}")
     sheets.append(sh)
 
-    # ---- write --------------------------------------------------------------
+    return _finish(project, outdir, sheets, produced)
+
+
+def _stadium_sheets(project, ctx, outdir, sheets, produced):
+    from .. import stadium as st
+    from ..units import SCALES
+    fieldg, secs = st.from_spec(project, ctx)
+    for i, sec in enumerate(secs):
+        sh = Sheet(project, f"S1.{i + 1}", f"Seating Bowl — {sec.name}")
+        x, y, w, h = sh.area
+        dr = st.section_drawing(sec, project.system)
+        _, scale = sh.viewport(dr, (x, y + h * 0.42, w, h * 0.58),
+                               title=f"{sec.name} — sightline section", number=1)
+        rows = st.section_table(sec, project.system)
+        n = len(rows)
+        per_col = 34
+        for c0 in range(0, n - 1, per_col):
+            chunk = [rows[0]] + rows[1 + c0:1 + c0 + per_col]
+            sh.table(x + (c0 // per_col) * 3.3 * IN, y + h * 0.40, chunk,
+                     col_w=(0.45 * IN, 0.75 * IN, 0.75 * IN, 0.7 * IN, 0.6 * IN),
+                     title="SIGHTLINE SCHEDULE" if c0 == 0 else None)
+        seats = sec.seats()
+        summ = [("Rows", sec.rows), ("Tread", f"{sec.tread / 0.0254:.1f}\""),
+                ("Target C", f"{sec.c_target * 1000:.0f} mm"),
+                ("Min C achieved", f"{min(r['C'] for r in sec.rows_data[1:]) * 1000:.0f} mm"),
+                ("Max rake", f"{sec.rake_deg:.1f}°"), ("Seats", f"{seats['total']:,}"),
+                ("Seats/row", seats["seats_per_row"]), ("Aisles", seats["aisles"])]
+        sh.table(x + w - 2.6 * IN, y + h * 0.40, summ, col_w=(1.3 * IN, 1.2 * IN), title="SECTION DATA")
+        sheets.append(sh)
+        fn = f"S1.{i + 1}-{_slug(sec.name)}-section.dxf"
+        write_dxf(dr, outdir / "dxf" / fn, project.units, SCALES[scale], project.name)
+        produced["dxf"].append(f"dxf/{fn}")
+
+
+def _finish(project, outdir, sheets, produced):
+    from matplotlib.backends.backend_pdf import PdfPages
+
     set_path = outdir / f"{_slug(project.name)}-drawing-set.pdf"
     with PdfPages(set_path) as pdf:
         for s in sheets:
@@ -106,6 +151,19 @@ def _site_tables(sh: Sheet, project: Project, ctx, findings, x, y):
     b = project.building
     rows = []
     sysu = project.system
+    if b is None:
+        if project.parcel is not None:
+            rows.append(("Site area", fmt_area(project.parcel.area, sysu)))
+        if project.stadium:
+            from .. import stadium as st
+            fieldg, secs = st.from_spec(project, ctx)
+            for sec in secs:
+                rows.append((sec.name[:24], f"{sec.seats()['total']:,} seats"))
+            rows.append(("New seats total", f"{sum(x.seats()['total'] for x in secs):,}"))
+        rows.append(("Code profile", project.code.get("profile", "IBC-2021")))
+        y = sh.table(x, y, rows, col_w=(1.35 * IN, 1.15 * IN), title="SITE DATA")
+        _findings_and_sources(sh, ctx, findings, x, y)
+        return
     fp = b.to_site(b.footprint())
     if project.parcel is not None:
         rows.append(("Lot area", fmt_area(project.parcel.area, sysu)))
@@ -128,6 +186,10 @@ def _site_tables(sh: Sheet, project: Project, ctx, findings, x, y):
     if "district" in project.zoning:
         rows.insert(0, ("Zoning district", project.zoning["district"]))
     y = sh.table(x, y, rows, col_w=(1.35 * IN, 1.15 * IN), title="SITE DATA")
+    _findings_and_sources(sh, ctx, findings, x, y)
+
+
+def _findings_and_sources(sh, ctx, findings, x, y):
     if findings:
         fails = [f for f in findings if f.status == "FAIL"]
         warns = [f for f in findings if f.status == "WARN"]
@@ -136,7 +198,7 @@ def _site_tables(sh: Sheet, project: Project, ctx, findings, x, y):
             rows.append((f.status, f.item[:34]))
         y = sh.table(x, y - 0.2 * IN, rows, col_w=(0.45 * IN, 2.05 * IN), title="COORDINATION")
     if ctx is not None:
-        rows = [(a[:40], "") for a in ctx.attribution]
+        rows = [(a[:44], "") for a in ctx.attribution]
         rows.append(("* = height estimated (untagged)", ""))
         sh.table(x, y - 0.2 * IN, rows, col_w=(2.5 * IN, 0.0), title="DATA SOURCES")
 

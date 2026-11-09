@@ -364,7 +364,7 @@ def context_model(ctx: SiteContext, project: Project | None = None, m: Model | N
                   terrain: bool = True) -> Model:
     m = m or Model()
     site_fp = None
-    if project is not None:
+    if project is not None and project.building is not None:
         b = project.building
         site_fp = b.to_site(b.footprint()).buffer(0.5)
     if terrain:
@@ -436,8 +436,20 @@ def lidar_building(m: Model, f, ctx: SiteContext, mat: str = "context",
     if fit:
         _fitted_building(m, parts[0], fit, datum, ctx, mat, roof_mat, group)
         return
-    for r in f.props["roof_grids"]:
-        poly = parts[r.get("part", 0)]
+    grids = f.props["roof_grids"]
+
+    def grid_for(poly):
+        c = poly.representative_point()
+        for r in grids:
+            if (r["x0"] - 1 <= c.x <= r["x0"] + r["nx"] * r["cell"] + 1 and
+                    r["y0"] - 1 <= c.y <= r["y0"] + r["ny"] * r["cell"] + 1):
+                return r
+        return None
+
+    for poly in parts:
+        r = grid_for(poly)
+        if r is None:
+            continue
         zf = _grid_sampler(r, datum)
         c = r["cell"]
         ring_pts = []
@@ -522,9 +534,46 @@ def _fitted_building(m, poly, fit, datum, ctx, mat, roof_mat, group):
 def full_model(project: Project, ctx: SiteContext | None) -> Model:
     m = Model()
     if ctx is not None:
+        apply_clips(project, ctx)
         context_model(ctx, project, m)
-    building_model(project, ctx, m)
+    if project.building is not None:
+        building_model(project, ctx, m)
+    if project.stadium:
+        from . import stadium as st
+        fieldg, secs = st.from_spec(project, ctx)
+        if fieldg is not None:
+            gz = ctx.ground_z(*fieldg.center) if ctx is not None else 0.0
+            st.field_model(m, fieldg, gz + 0.02)
+            for s in secs:
+                st.stand_model(m, fieldg, s, gz)
     return m
+
+
+def apply_clips(project: Project, ctx: SiteContext) -> None:
+    """Remove demolition zones / new-construction footprints from existing context."""
+    from shapely.ops import unary_union
+
+    zones = list(project.clip_context)
+    if project.stadium:
+        from . import stadium as st
+        fieldg, secs = st.from_spec(project, ctx)
+        if fieldg is not None:
+            zones += [st.bowl_polygon(fieldg, s).buffer(0.5) for s in secs]
+    if not zones:
+        return
+    z = unary_union(zones)
+    keep = []
+    for f in ctx.features:
+        if f.kind in ("building", "building_part", "tree") and f.geom.intersects(z):
+            if f.kind == "tree":
+                continue
+            g = f.geom.difference(z)
+            if g.is_empty or g.area < 5:
+                continue
+            f.geom = g
+            f.props.pop("roof_fit", None)  # fitted roof no longer describes the clipped mass
+        keep.append(f)
+    ctx.features = keep
 
 
 # ---------------------------------------------------------------------------

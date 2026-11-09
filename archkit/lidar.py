@@ -437,12 +437,16 @@ def apply_to_context(ctx, spacing_m: float = 0.5, project: str | None = None,
         ctx.features = [f for f in ctx.features if f.kind != "tree"]
         tr = detect_trees(veg, lambda x, y: ctx.ground_z(x, y) + z0, ctx.radius_m)
         bfp = [f.geom for f in ctx.of("building")]
+        # no trees inside stadia / on pitches (light standards, rigging scatter like foliage)
+        bfp += [f.geom for f in ctx.of("green") if f.props.get("use") in ("stadium", "pitch")]
         from shapely.strtree import STRtree
         tree_idx = STRtree(bfp) if bfp else None
         for t in tr:
             p = Point(t["x"], t["y"])
             if tree_idx is not None and len(tree_idx.query(p, predicate="intersects")):
                 continue
+            if t["height_m"] > 14 and t["crown_m"] < 4.0:
+                continue  # tall & narrow: light pole / mast, not a tree
             ctx.features.append(Feature("tree", p, {"height_m": t["height_m"], "crown_m": t["crown_m"]},
                                         f"LiDAR (3DEP {proj})"))
         stats["trees"] = len(ctx.of("tree"))

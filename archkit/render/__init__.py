@@ -67,7 +67,7 @@ def render_blender(project: Project, ctx: SiteContext | None, model: Model, v: V
         raise RuntimeError("Blender not found. Install Blender 4.x and set $BLENDER, "
                            "or use `archkit render --preview`.")
     outdir.mkdir(parents=True, exist_ok=True)
-    obj = export_obj(model, outdir / "model" / "scene.obj", project.building.materials)
+    obj = export_obj(model, outdir / "model" / "scene.obj", project.materials)
     cam, info = view_camera(project, ctx, v)
     az, el = sun_for(project, v)
     M = np.eye(4)
@@ -75,7 +75,7 @@ def render_blender(project: Project, ctx: SiteContext | None, model: Model, v: V
     used = sorted({f.material for f in model.faces})
     job = {
         "obj": str(obj.resolve()),
-        "materials": {m: materials.resolve(m, project.building.materials) for m in used},
+        "materials": {m: materials.resolve(m, project.materials) for m in used},
         "sun_az": az, "sun_el": el,
         "altitude_m": (ctx.elevation["origin_m"] if ctx and ctx.elevation else 0.0),
         "camera": {"focal_mm": cam.focal_mm, "sensor_mm": cam.sensor_mm,
@@ -175,7 +175,7 @@ def render_preview(project: Project, ctx: SiteContext | None, model: Model, v: V
         n /= ln
         if n @ (cam.eye - f.verts.mean(0)) < 0:
             n = -n  # two-sided
-        mp = materials.resolve(f.material, project.building.materials)
+        mp = materials.resolve(f.material, project.materials)
         base = np.array(mp["base"])
         lam = max(0.0, n @ sv) if el > 0 else 0.0
         sky = 0.35 + 0.25 * n[2]
