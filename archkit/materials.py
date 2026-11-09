@@ -45,7 +45,7 @@ LIB: dict[str, dict] = {
     "grass":         {"base": (0.10, 0.20, 0.05), "rough": 0.95, "bump": 0.4, "noise": 0.15},
     "terrain":       {"base": (0.09, 0.16, 0.05), "rough": 0.95, "bump": 0.4, "noise": 0.15},
     "water":         {"base": (0.02, 0.05, 0.06), "rough": 0.05, "transmission": 0.3, "ior": 1.33},
-    "tree_crown":    {"base": (0.05, 0.13, 0.03), "rough": 0.9, "sss": 0.2},
+    "tree_crown":    {"base": (0.045, 0.11, 0.025), "rough": 0.85, "sss": 0.15, "noise": 0.25, "bump": 0.8},
     "tree_trunk":    {"base": (0.15, 0.10, 0.07), "rough": 0.9},
     "rail":          {"base": (0.25, 0.22, 0.20), "rough": 0.9},
 }

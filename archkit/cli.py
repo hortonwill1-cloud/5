@@ -42,7 +42,13 @@ def load_all(path: str, args, need_ctx: bool = True):
             ctx = SiteContext.load(cache)
         elif not getattr(args, "offline", False):
             ctx = build_context(project.lat, project.lon, project.context_radius,
-                                imports=project.imports, osm_json=project.osm_json)
+                                imports=project.imports, osm_json=project.osm_json,
+                                terrain=not project.lidar)
+            if project.lidar:
+                from .lidar import apply_to_context
+                stats = apply_to_context(ctx, spacing_m=project.lidar.get("spacing_m", 0.5),
+                                         project=project.lidar.get("project"))
+                print("LiDAR:", stats)
             ctx.save(cache)
         else:
             from .geo import LocalFrame

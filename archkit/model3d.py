@@ -392,6 +392,9 @@ def context_model(ctx: SiteContext, project: Project | None = None, m: Model | N
         if site_fp is not None and g.intersects(site_fp) and f.props.get("demolish", True):
             continue  # existing building on our footprint: assume demolition (flagged by checks)
         gz = f.props.get("ground_z", 0.0)
+        if f.props.get("roof_grids"):
+            lidar_building(m, f, ctx)
+            continue
         add_prism(m, g, gz + f.base - (0.5 if f.base == 0 else 0), gz + f.height, "context",
                   "context/buildings", top_mat="context_roof")
     for t in ctx.of("tree"):
@@ -405,6 +408,59 @@ def context_model(ctx: SiteContext, project: Project | None = None, m: Model | N
                       "tree_trunk", "context/trees")
         add_sphere(m, x, y, gz + h - cr, cr, "tree_crown", "context/trees", squash=1.1)
     return m
+
+
+def _grid_sampler(r: dict, datum: float):
+    Z = np.asarray(r["z"], float).reshape(r["ny"], r["nx"])
+    x0, y0, c = r["x0"], r["y0"], r["cell"]
+
+    def f(x, y):
+        fx = min(max((x - x0) / c, 0), r["nx"] - 1.0001)
+        fy = min(max((y - y0) / c, 0), r["ny"] - 1.0001)
+        i, j = int(fx), int(fy)
+        tx, ty = fx - i, fy - j
+        return float(Z[j, i] * (1 - tx) * (1 - ty) + Z[j, i + 1] * tx * (1 - ty)
+                     + Z[j + 1, i] * (1 - tx) * ty + Z[j + 1, i + 1] * tx * ty) - datum
+    return f
+
+
+def lidar_building(m: Model, f, ctx: SiteContext, mat: str = "context",
+                   roof_mat: str = "context_roof", group: str = "context/buildings"):
+    """Building from measured LiDAR roof grid: true roof surface + walls to grade."""
+    from shapely.ops import triangulate as dtri
+
+    g = f.geom
+    parts = list(g.geoms) if g.geom_type == "MultiPolygon" else [g]
+    datum = f.props.get("z_datum", 0.0)
+    for r in f.props["roof_grids"]:
+        poly = parts[r.get("part", 0)]
+        zf = _grid_sampler(r, datum)
+        c = r["cell"]
+        ring_pts = []
+        for ring in [poly.exterior, *poly.interiors]:
+            ring_pts += list(ring.segmentize(c).coords)[:-1]
+        inner = poly.buffer(-c * 0.5)
+        grid_pts = []
+        if not inner.is_empty:
+            import shapely
+            xs = r["x0"] + np.arange(r["nx"]) * c
+            ys = r["y0"] + np.arange(r["ny"]) * c
+            X, Y = np.meshgrid(xs, ys)
+            msk = shapely.contains_xy(inner, X.ravel(), Y.ravel())
+            grid_pts = list(zip(X.ravel()[msk], Y.ravel()[msk]))
+        tris = dtri(MultiPoint(ring_pts + grid_pts))
+        for t in tris:
+            if not poly.contains(t.centroid):
+                continue
+            cc = np.asarray(t.exterior.coords)[:3]
+            if (cc[1, 0] - cc[0, 0]) * (cc[2, 1] - cc[0, 1]) - (cc[2, 0] - cc[0, 0]) * (cc[1, 1] - cc[0, 1]) < 0:
+                cc = cc[::-1]
+            m.add([[x, y, zf(x, y)] for x, y in cc], roof_mat, group)
+        for ring in [poly.exterior, *poly.interiors]:
+            co = list(ring.segmentize(c).coords)
+            for (ax, ay), (bx, by) in zip(co[:-1], co[1:]):
+                ga, gb = ctx.ground_z(ax, ay) - 0.3, ctx.ground_z(bx, by) - 0.3
+                m.add([[ax, ay, ga], [bx, by, gb], [bx, by, zf(bx, by)], [ax, ay, zf(ax, ay)]], mat, group)
 
 
 def full_model(project: Project, ctx: SiteContext | None) -> Model:

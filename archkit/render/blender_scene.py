@@ -110,6 +110,36 @@ def make_material(name, p):
     return mat
 
 
+def organic_trees(ob):
+    """Turn low-poly crown spheres into irregular, leafy-looking canopies."""
+    import bmesh
+
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.001)  # weld so displacement stays closed
+    bm.to_mesh(ob.data)
+    bm.free()
+    sub = ob.modifiers.new("Subdiv", "SUBSURF")
+    sub.levels = sub.render_levels = 2
+    tex = bpy.data.textures.new("crown_noise", "CLOUDS")
+    tex.noise_scale = 1.6
+    tex.noise_depth = 3
+    disp = ob.modifiers.new("Displace", "DISPLACE")
+    disp.texture = tex
+    disp.texture_coords = "GLOBAL"
+    disp.strength = 1.4
+    disp.mid_level = 0.55
+    tex2 = bpy.data.textures.new("leaf_noise", "CLOUDS")
+    tex2.noise_scale = 0.45
+    tex2.noise_depth = 2
+    d2 = ob.modifiers.new("Leaves", "DISPLACE")
+    d2.texture = tex2
+    d2.texture_coords = "GLOBAL"
+    d2.strength = 0.5
+    for poly in ob.data.polygons:
+        poly.use_smooth = True
+
+
 def build_world(sun_az, sun_el):
     world = bpy.data.worlds.new("Sky")
     bpy.context.scene.world = world
@@ -171,8 +201,8 @@ def main():
                 ob.is_holdout = True
             if name.startswith("terrain") or "roads" in name or "green" in name:
                 ob.is_shadow_catcher = True
-        if name.startswith("context_trees") or name.startswith("context/trees"):
-            ob.visible_shadow = True
+        if "trees" in name:
+            organic_trees(ob)
     build_world(job["sun_az"], job["sun_el"])
     setup_camera(job["camera"])
 

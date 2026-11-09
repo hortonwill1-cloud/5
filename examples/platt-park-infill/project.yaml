@@ -19,6 +19,7 @@ site:
   context_radius_m: 120
   timezone: America/Denver   # IANA zone: sun/shadow times are local clock time incl. DST
   elevation_source: auto    # USGS 3DEP 1 m (US) -> SRTM 30 m fallback
+  lidar: {spacing_m: 0.5}   # measure context buildings, roofs, trees & terrain from USGS 3DEP LiDAR
   # PARCEL — APPROXIMATION for this example: Denver standard 50' x 125' lot with
   # a 60' street right-of-way (front line 30' from the OSM street centreline at
   # x = 63.3').  For real work replace with Denver Open Data parcel GeoJSON

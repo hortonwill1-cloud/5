@@ -208,6 +208,7 @@ class Project:
     osm_json: str | None = None
     elevation_source: str = "auto"
     timezone: str | None = None   # IANA name, e.g. America/Denver (DST-aware)
+    lidar: dict | None = None     # {spacing_m: 0.5, project: <EPT name>} -> measured context
 
 
 def _len(v, k):
@@ -344,7 +345,9 @@ def load(path: str | Path) -> Project:
         sheet=d.get("sheet", {}), root=path.parent,
         osm_json=(str((path.parent / site["osm_json"]).resolve()) if site.get("osm_json") else None),
         elevation_source=site.get("elevation_source", "auto"),
-        timezone=site.get("timezone"))
+        timezone=site.get("timezone"),
+        lidar=(dict(site["lidar"]) if isinstance(site.get("lidar"), dict)
+               else ({} if site.get("lidar") else None)))
 
 
 def resolve_parcel(project: Project, frame) -> None:
