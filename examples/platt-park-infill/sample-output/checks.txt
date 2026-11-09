@@ -1,0 +1,44 @@
+0 FAIL · 3 WARN · 35 PASS · 4 INFO
+Preliminary checks only — verify with the AHJ and a licensed professional.
+[WARN] data    parcel boundary source: APPROXIMATE - standard Denver lot; replace with county parcel/survey (req. boundary survey for permit documents) 
+[WARN] site    existing building on footprint (1435 South Washington Street): 1,171 SF (req. demolition or redesign) confirm demolition scope
+[WARN] site    existing building on footprint (South Washington Street): 234 SF (req. demolition or redesign) confirm demolition scope
+[PASS] zoning  setbacks: within buildable envelope (req. front 20'-0", side 5'-0", rear 20'-0") 
+[PASS] zoning  lot line 0 (front): 22'-0" (req. >= 20'-0") 
+[PASS] zoning  lot line 1 (side): 7'-7 1/2" (req. >= 5'-0") 
+[PASS] zoning  lot line 2 (rear): 50'-3" (req. >= 20'-0") 
+[PASS] zoning  lot line 3 (side): 7'-7 1/2" (req. >= 5'-0") 
+[PASS] zoning  lot coverage: 29.3% (req. <= 37.5%) 
+[PASS] code    fire separation distance: 7'-7 1/2" (req. >= 5'-0" or 1-hr rated wall) IRC R302.1 / IBC 705
+[PASS] zoning  building height (mean roof): 24'-10 5/16" (req. <= 30'-0") 
+[PASS] zoning  building height (highest point): 28'-10 3/4" (req. <= 30'-0") confirm local height definition
+[PASS] site    nearest neighbouring building: 15'-0 1/8" (req. >= 10'-0" typical) verify on survey
+[PASS] code    Level 1 101 Living size: 378 SF, min dim 18'-0" (req. >= 70.0 SF, 7'-0") IRC R304 / IBC 1208
+[PASS] code    Level 1 103 Kitchen size: 360 SF, min dim 18'-0" (req. >= 70.0 SF, 7'-0") IRC R304 / IBC 1208
+[PASS] code    Level 1 104 Dining size: 252 SF, min dim 14'-0" (req. >= 70.0 SF, 7'-0") IRC R304 / IBC 1208
+[PASS] code    Level 1 105 Family size: 544 SF, min dim 16'-0" (req. >= 70.0 SF, 7'-0") IRC R304 / IBC 1208
+[PASS] code    Level 1 door D1 width: 3'-6" (req. >= 3'-0") IRC R311.2 / IBC 1010.1.1
+[PASS] code    Level 1 door D2 glass slider width: 12'-0" (req. >= 2'-6") IRC R311.2 / IBC 1010.1.1
+[PASS] code    Level 1 door CO1 width: 10'-0" (req. >= 2'-6") IRC R311.2 / IBC 1010.1.1
+[PASS] code    Level 1 door CO2 width: 4'-0" (req. >= 2'-6") IRC R311.2 / IBC 1010.1.1
+[PASS] code    Level 1 door CO3 width: 8'-0" (req. >= 2'-6") IRC R311.2 / IBC 1010.1.1
+[PASS] code    Level 1 door CO4 width: 14'-0" (req. >= 2'-6") IRC R311.2 / IBC 1010.1.1
+[PASS] code    Level 1 stair 1 geometry: riser 0'-7 1/2", tread 0'-10" (req. riser <= 0'-7 3/4", tread >= 0'-10") IRC R311.7.5 / IBC 1011.5
+[PASS] code    Level 1 stair 1 width: 3'-2 3/8" (req. >= 3'-0") 
+[PASS] code    Level 2 201 Primary Bedroom size: 400 SF, min dim 20'-0" (req. >= 70.0 SF, 7'-0") IRC R304 / IBC 1208
+[PASS] code    Level 2 201 Primary Bedroom emergency escape opening: compliant window (req. net 5.7 SF, sill <= 3'-8") IRC R310 / IBC 1031 (net clear estimated from rough opening)
+[PASS] code    Level 2 203 Bedroom 2 size: 256 SF, min dim 16'-0" (req. >= 70.0 SF, 7'-0") IRC R304 / IBC 1208
+[PASS] code    Level 2 203 Bedroom 2 emergency escape opening: compliant window (req. net 5.7 SF, sill <= 3'-8") IRC R310 / IBC 1031 (net clear estimated from rough opening)
+[PASS] code    Level 2 204 Bedroom 3 size: 224 SF, min dim 14'-0" (req. >= 70.0 SF, 7'-0") IRC R304 / IBC 1208
+[PASS] code    Level 2 204 Bedroom 3 emergency escape opening: compliant window (req. net 5.7 SF, sill <= 3'-8") IRC R310 / IBC 1031 (net clear estimated from rough opening)
+[PASS] code    Level 2 door 201 width: 3'-0" (req. >= 2'-6") IRC R311.2 / IBC 1010.1.1
+[PASS] code    Level 2 door 202 width: 2'-8 1/16" (req. >= 2'-6") IRC R311.2 / IBC 1010.1.1
+[PASS] code    Level 2 door 204 width: 2'-8 1/16" (req. >= 2'-6") IRC R311.2 / IBC 1010.1.1
+[PASS] code    Level 2 door 203 width: 2'-8 1/16" (req. >= 2'-6") IRC R311.2 / IBC 1010.1.1
+[PASS] code    Level 2 door 205 width: 2'-6" (req. >= 2'-6") IRC R311.2 / IBC 1010.1.1
+[PASS] code    Level 2 door 206 width: 2'-6" (req. >= 2'-6") IRC R311.2 / IBC 1010.1.1
+[PASS] code    egress door provided: yes (req. >= 1) IRC R311.2 / IBC 1006
+[INFO] data    context building heights measured (LiDAR): 113/113 (req. -) 
+[INFO] data    terrain source: USGS 3DEP LiDAR ground returns (class 2) [CO_DRCOG_2_2020] (req. -) 
+[INFO] zoning  lot area: 6,250 SF (req. -) 
+[INFO] site    nearest road: South Washington Street: 39'-6 1/8" to pavement edge (ESTIMATED (class default)) (req. -) 

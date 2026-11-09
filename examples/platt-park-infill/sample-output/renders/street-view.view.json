@@ -1,0 +1,28 @@
+{
+ "view": "street-view",
+ "datetime": "2026-06-21T09:30:00",
+ "utc_offset_h": 0.0,
+ "sun_azimuth_deg": 93.674,
+ "sun_elevation_deg": 42.819,
+ "camera_eye_site_m": [
+  24.384,
+  -16.764,
+  1.205
+ ],
+ "camera_forward": [
+  -0.845,
+  0.5269,
+  0.0911
+ ],
+ "focal_mm": 24.0,
+ "sensor_mm": 36.0,
+ "horizontal_fov_deg": 73.74,
+ "ortho": "USDA NAIP via USGS The National Map (public domain) on context_roof",
+ "sky_hdri": "kloofendal_38d_partly_cloudy_puresky",
+ "sky_sun_elevation_mismatch_deg": 5.03,
+ "shadows": "exact sun lamp at computed position (HDRI sun removed)",
+ "camera_latlon": [
+  39.6902868,
+  -104.9792324
+ ]
+}

@@ -1,0 +1,32 @@
+0 FAIL · 1 WARN · 16 PASS · 13 INFO
+Preliminary checks only — verify with the AHJ and a licensed professional.
+[WARN] data    parcel boundary source: none (req. boundary survey for permit documents) 
+[PASS] egress  ESE Lower Bowl aisle stair width: 48.0" (req. >= 48.0") IBC 1029.9.1
+[PASS] egress  ESE Lower Bowl seats per row between aisles: 16 (req. <= 100) IBC 1029.13.1 / Table 1029.13.1.1
+[PASS] egress  ESE Lower Bowl row clear width (est.): 15.3" (req. >= 12.3") IBC 1029.13.1 (verify with seat product)
+[PASS] egress  ESE Lower Bowl max riser: 520 mm (req. aisle risers 4"-8" (split rows into steps)) IBC 1029.13.2.2
+[PASS] sightline ESE Lower Bowl maximum rake: 31.8° (req. <= 34°) Guide to Safety at Sports Grounds 12.13 (comfort/vertigo)
+[PASS] sightline ESE Lower Bowl C-value min / target: 90 mm / 90 mm (req. >= 60 mm (90 good, 120 excellent)) 
+[PASS] egress  ESE Lower Bowl aisle egress capacity: 24.0 ft (6 aisles) (req. >= 21.6 ft) IBC 1029.6.3 (outdoor smoke-protected) — add aisles/widen, or count vomitories
+[PASS] egress  ESE Lower Bowl travel to section exit (est.): 136 ft (req. <= 400 ft) IBC 1029.7 (outdoor smoke-protected may be unlimited)
+[PASS] egress  ESE Upper Tier aisle stair width: 48.0" (req. >= 48.0") IBC 1029.9.1
+[PASS] egress  ESE Upper Tier seats per row between aisles: 26 (req. <= 100) IBC 1029.13.1 / Table 1029.13.1.1
+[PASS] egress  ESE Upper Tier row clear width (est.): 17.3" (req. >= 13.7") IBC 1029.13.1 (verify with seat product)
+[PASS] egress  ESE Upper Tier max riser: 540 mm (req. aisle risers 4"-8" (split rows into steps)) IBC 1029.13.2.2
+[PASS] sightline ESE Upper Tier maximum rake: 31.2° (req. <= 34°) Guide to Safety at Sports Grounds 12.13 (comfort/vertigo)
+[PASS] sightline ESE Upper Tier C-value min / target: 90 mm / 90 mm (req. >= 60 mm (90 good, 120 excellent)) 
+[PASS] egress  ESE Upper Tier aisle egress capacity: 20.0 ft (5 aisles) (req. >= 16.3 ft) IBC 1029.6.3 (outdoor smoke-protected) — add aisles/widen, or count vomitories
+[PASS] egress  ESE Upper Tier travel to section exit (est.): 100 ft (req. <= 400 ft) IBC 1029.7 (outdoor smoke-protected may be unlimited)
+[INFO] data    context building heights measured (LiDAR): 31/32 (req. -) 
+[INFO] data    context building heights estimated: 1/32 (req. tagged heights, LiDAR or survey) verify by site visit / LiDAR before publishing views
+[INFO] data    terrain source: USGS 3DEP LiDAR ground returns (class 2) [KY_Eastern_B1_2019] (req. -) 
+[INFO] stadium field pose: centre (-2.8, 5.1) m, axis 148.75° (req. -) from OSM pitch polygon
+[INFO] stadium ESE Lower Bowl seats: 3,240 (40 rows x 81) (req. 6 aisles) 
+[INFO] egress  ESE Lower Bowl aisle steps per row (max): 3 (req. uniform within each row) IBC 1029.13.2.2.1
+[INFO] egress  ESE Lower Bowl occupant load: 3,240 (req. egress width @ 0.08"/occ stairs, 0.06"/occ level) IBC 1029.6.3 (outdoor smoke-protected)
+[INFO] egress  ESE Lower Bowl required stair egress width: 21.6 ft (req. provide via aisles/vomitories) IBC 1029.6.3 (outdoor smoke-protected)
+[INFO] stadium ESE Upper Tier seats: 2,448 (24 rows x 102) (req. 5 aisles) 
+[INFO] egress  ESE Upper Tier aisle steps per row (max): 3 (req. uniform within each row) IBC 1029.13.2.2.1
+[INFO] egress  ESE Upper Tier occupant load: 2,448 (req. egress width @ 0.08"/occ stairs, 0.06"/occ level) IBC 1029.6.3 (outdoor smoke-protected)
+[INFO] egress  ESE Upper Tier required stair egress width: 16.3 ft (req. provide via aisles/vomitories) IBC 1029.6.3 (outdoor smoke-protected)
+[INFO] stadium new seats (all sections): 5,688 (req. -) 
