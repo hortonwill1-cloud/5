@@ -262,9 +262,11 @@ def roof_surface(poly, pts_struct: np.ndarray, pts_ground: np.ndarray, cell: flo
     if len(g):
         gl = _grid_stat(g[:, 0], g[:, 1], g[:, 2], minx - cell / 2, miny - cell / 2, cell, nx, ny, "min")
         hi = np.where(np.isnan(hi) & ~np.isnan(gl), gl, hi)
-    z = _median3(_despike(_fill_nearest(hi)))
+    raw = _despike(_fill_nearest(hi))
+    z = _median3(raw)   # display surface; the median filter shaves ridges, so fit on `raw`
     return {"x0": minx, "y0": miny, "cell": cell, "nx": nx, "ny": ny,
-            "z": [round(float(v), 2) for v in z.ravel()]}
+            "z": [round(float(v), 2) for v in z.ravel()],
+            "z_raw": [round(float(v), 2) for v in raw.ravel()]}
 
 
 def fit_roof(poly, grid: dict, ground_abs: float, max_rms: float = 0.35,
@@ -289,7 +291,7 @@ def fit_roof(poly, grid: dict, ground_abs: float, max_rms: float = 0.35,
     xs = grid["x0"] + np.arange(nx) * cell
     ys = grid["y0"] + np.arange(ny) * cell
     X, Y = np.meshgrid(xs, ys)
-    Z = np.asarray(grid["z"]).reshape(ny, nx)
+    Z = np.asarray(grid.get("z_raw", grid["z"])).reshape(ny, nx)
     inner = poly.buffer(-0.6)
     if inner.is_empty:
         return None

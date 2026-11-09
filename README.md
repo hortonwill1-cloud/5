@@ -28,13 +28,26 @@ Outputs land in `examples/platt-park-infill/out/`:
 | `renders/*.png` | Cycles renders; `*.view.json` records sun position, camera, lat/lon |
 | `shadow-study.pdf/png` | equinox/solstice × 9am/12pm/3pm, new vs existing shadow |
 
+## What makes it accurate *and* photoreal
+
+* **Measured context**: USGS 3DEP LiDAR → real building heights and roof forms, bare-earth
+  terrain and individual trees, merged with OpenStreetMap footprints and streets.
+* **Photographic lighting**: real HDRI skies chosen and rotated to match the true sun; the
+  sky's own sun is replaced by an exact sun lamp, so shadows are correct to the minute.
+* **Scanned materials** (Poly Haven, CC0) mapped at their published real-world size.
+* **Stadium tools**: C-value seating-bowl solver, IBC §1029 egress, seat counts, NCAA field.
+
+Examples: `examples/platt-park-infill` (Denver infill house) and
+`examples/kroger-field-renovation` (Kroger Field end-zone concept, Lexington KY).
+
 ## Accuracy
 
 * **Geometry**: site-local transverse-Mercator frame — distances agree with WGS84 geodesics
   to < 1 mm over 500 m (tested). Drawings are plotted at true architectural/engineering scale
   with graphic scale bars; DXF dimensions measure in real units.
 * **Sun**: NOAA solar-position algorithm (~0.01°), DST-aware via IANA time zones. Renders use
-  Blender's Nishita physical sky set to that sun.
+  an exact sun lamp at that position (HDRI skies are rotated to match; `sky: physical` uses
+  Blender's Nishita sky).
 * **Camera matching**: `camera_solve` recovers a photo's camera from ≥ 6 surveyed points
   (normalised DLT + Gauss-Newton), reporting reprojection RMS — the basis for verified views.
 * **Context data**: OpenStreetMap footprints are typically ±1–3 m and heights are often
