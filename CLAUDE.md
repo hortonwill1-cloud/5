@@ -68,6 +68,16 @@ lamp; auto exposure) and `textures: true` (scanned PBR maps at real-world size, 
 final: `--percent 100 --samples 256+` (4K textures/HDRI are used at 100%).
 `<view>.view.json` records sun, camera, HDRI and its elevation mismatch.
 
+Photoreal layers (all default on, per-view toggles): `ortho` drapes USDA NAIP aerial
+photography (0.3 m, imagery.nationalmap.gov) on ground/roads/LiDAR roofs (up-facing only,
+masked under the proposal); `tree_models` instances Poly Haven scanned trees at LiDAR tree
+positions; `camera_fx` adds bevels, glare, aerial haze, vignette, chromatic aberration and
+grain. Limits to state honestly: context façades are untextured massing (LiDAR has no
+colour), the orthophoto carries its flight-date shadows, and no people/vehicles are added.
+For images meant to be indistinguishable from photographs, use a photomontage
+(`background_photo` + `camera_solve`): the real photo supplies everything except the
+proposal.
+
 ## Stadiums / assembly seating
 
 `stadium:` block (see `examples/kroger-field-tool-demo/project.yaml`): field auto-posed from
