@@ -76,8 +76,8 @@ views:
     resolution: [3840, 2160]
     samples: 256
   - name: approach
-    eye: [519.8, 2.7, 5.5]       # open ground ESE of the end zone (checked clear of buildings)
-    target: [215.3, -119.5, 40]
+    eye: [708.2, -572.1, 5.5]    # SE lots, ~280 m from field centre (clear of buildings and trees)
+    target: [145.2, -77.0, 45]
     focal_mm: 24
     datetime: "2026-09-12T11:00:00"
     resolution: [3840, 2160]
