@@ -49,6 +49,14 @@ def view_camera(project: Project, ctx: SiteContext | None, v: View) -> tuple[Cam
         cam.width, cam.height = v.resolution
         cam.focal_px *= v.resolution[0] / int(w)
         return cam, info
+    if ctx is not None:
+        from shapely.geometry import Point
+        pe = Point(v.eye[0], v.eye[1])
+        for f in ctx.of("building") + ctx.of("building_part"):
+            if f.geom.contains(pe) and v.eye[2] < f.height:
+                nm = f.props.get("name") or f.props.get("building") or f"OSM {f.props.get('osm_id')}"
+                raise ValueError(f"view {v.name!r}: camera eye is inside existing building '{nm}' "
+                                 f"({f.height:.0f} m tall); move the eye or raise it above the roof")
     gz = (lambda x, y: ctx.ground_z(x, y)) if ctx is not None else (lambda x, y: 0.0)
     eye = (v.eye[0], v.eye[1], gz(v.eye[0], v.eye[1]) + v.eye[2])
     tgt = (v.target[0], v.target[1], gz(v.target[0], v.target[1]) + v.target[2])
