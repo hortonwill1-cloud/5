@@ -1,0 +1,28 @@
+{
+ "view": "aerial",
+ "datetime": "2026-09-12T15:30:00",
+ "utc_offset_h": 0.0,
+ "sun_azimuth_deg": 224.956,
+ "sun_elevation_deg": 46.904,
+ "camera_eye_site_m": [
+  281.757,
+  -27.219,
+  131.783
+ ],
+ "camera_forward": [
+  -0.8929,
+  0.0412,
+  -0.4483
+ ],
+ "focal_mm": 35.0,
+ "sensor_mm": 36.0,
+ "horizontal_fov_deg": 54.43,
+ "ortho": "USDA NAIP via USGS The National Map (public domain) on terrain, grass, asphalt, sidewalk, context_roof, water",
+ "sky_hdri": "kloofendal_48d_partly_cloudy_puresky",
+ "sky_sun_elevation_mismatch_deg": 1.08,
+ "shadows": "exact sun lamp at computed position (HDRI sun removed)",
+ "camera_latlon": [
+  38.0224896,
+  -84.5019103
+ ]
+}
