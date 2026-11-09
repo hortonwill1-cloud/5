@@ -263,9 +263,13 @@ def floor_plan(project: Project, level: Level, cut_height: float = 1.2) -> Drawi
             tag_pt = P((s0 + s1) / 2, (t + 0.45) * -_outside_sign(level, w, o, a, u, n) * -1)
             dr.text(tag_pt, o.tag or "D", "A-ANNO-SYMB", h_mm=1.8, z=7, box=True)
 
-    # stairs
+    # stairs on this level, and stairs arriving from the level below (shown DN)
     for s in level.stairs:
         _stair(dr, s, level)
+    idx = project.building.levels.index(level)
+    if idx > 0:
+        for s in project.building.levels[idx - 1].stairs:
+            _stair(dr, s, level, down=True)
 
     # exterior dimension strings
     ext = [w for w in level.walls if w.exterior]
@@ -327,7 +331,16 @@ def _door(dr: Drawing, o: Opening, P, t, level, w, a, u, n):
     dr.arc(tuple(hinge), o.width, lo, hi, "A-DOOR-SWNG", z=6)
 
 
-def _stair(dr: Drawing, s, level: Level):
+def stair_rect(s) -> Polygon:
+    ang = math.radians(s.direction_deg)
+    u = np.array([math.cos(ang), math.sin(ang)])
+    n = np.array([-u[1], u[0]])
+    a = np.asarray(s.start, float)
+    run = (s.risers - 1) * s.tread
+    return Polygon([a, a + u * run, a + u * run + n * s.width, a + n * s.width])
+
+
+def _stair(dr: Drawing, s, level: Level, down: bool = False):
     ang = math.radians(s.direction_deg)
     u = np.array([math.cos(ang), math.sin(ang)])
     n = np.array([-u[1], u[0]])
@@ -345,6 +358,9 @@ def _stair(dr: Drawing, s, level: Level):
     head = mid1
     for side in (-1, 1):
         dr.line(tuple(head), tuple(head - u * 0.3 + n * side * 0.15), "A-FLOR-STRS", z=6)
+    if down:
+        dr.text(tuple(mid0 - u * 0.35), f"DN {s.risers}R", h_mm=1.8, z=7)
+        return
     dr.text(tuple(mid0 - u * 0.35), f"UP {s.risers}R", h_mm=1.8, z=7)
     # break line at cut height (~ 1/3 run)
     k = max(1, int(treads * 0.45))

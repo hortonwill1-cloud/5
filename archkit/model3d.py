@@ -303,7 +303,20 @@ def building_model(project: Project, ctx: SiteContext | None, m: Model | None = 
         # slab bears inside the exterior wall (edge hidden), like platform framing
         inner = lv.footprint().buffer(-max(w.thickness for w in lv.walls if w.exterior) + 0.01,
                                       join_style="mitre")
+        i = b.levels.index(lv)
+        if i > 0 and b.levels[i - 1].stairs:  # floor opening over stairs from below
+            from .drawings.plans import stair_rect
+            for st in b.levels[i - 1].stairs:
+                inner = inner.difference(stair_rect(st).buffer(0.05, join_style="mitre"))
         add_prism(m, b.to_site(inner), z - lv.slab, z, "slab", f"{lv.name}/slab")
+        for st in lv.stairs:  # stepped stair mass
+            ang = math.radians(st.direction_deg)
+            u = np.array([math.cos(ang), math.sin(ang)])
+            nn = np.array([-u[1], u[0]])
+            A = _xf(b, st.start)
+            for k in range(st.risers - 1):
+                add_box_along(m, A, _rot(b, u), _rot(b, nn), k * st.tread, (k + 1) * st.tread,
+                              0, st.width, z, z + (k + 1) * st.riser, "wood_cedar", f"{lv.name}/stairs")
         for w in lv.walls:
             add_wall(m, b, lv, w, z, mats)
     z_tow = ff + b.top_of_wall()
