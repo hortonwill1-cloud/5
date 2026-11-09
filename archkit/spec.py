@@ -145,11 +145,13 @@ class Building:
         tow = self.top_of_wall()
         if self.roof.type == "flat":
             return tow + self.roof.parapet
+        # Roof surface sits `thickness` (heel/rafter depth) above top of wall at the
+        # wall line; the overhang lowers the eave but does not raise the ridge.
         span = self._roof_span()
-        rise = self.roof.pitch * (span / 2 + self.roof.overhang)
+        rise = self.roof.pitch * span / 2
         if self.roof.type == "shed":
-            rise = self.roof.pitch * (span + 2 * self.roof.overhang)
-        return tow + rise + self.roof.thickness
+            rise = self.roof.pitch * (span + self.roof.overhang)
+        return tow + self.roof.thickness + rise
 
     def _roof_span(self) -> float:
         fp = self.footprint()
@@ -205,6 +207,7 @@ class Project:
     root: Path
     osm_json: str | None = None
     elevation_source: str = "auto"
+    timezone: str | None = None   # IANA name, e.g. America/Denver (DST-aware)
 
 
 def _len(v, k):
@@ -340,7 +343,8 @@ def load(path: str | Path) -> Project:
         code=d.get("code", {"profile": "IRC-2021"}), building=building, views=views,
         sheet=d.get("sheet", {}), root=path.parent,
         osm_json=(str((path.parent / site["osm_json"]).resolve()) if site.get("osm_json") else None),
-        elevation_source=site.get("elevation_source", "auto"))
+        elevation_source=site.get("elevation_source", "auto"),
+        timezone=site.get("timezone"))
 
 
 def resolve_parcel(project: Project, frame) -> None:

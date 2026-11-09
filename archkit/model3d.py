@@ -150,9 +150,10 @@ def add_wall(m: Model, b: Building, level: Level, wall: Wall, z_base: float, mat
         u = _rot(b, u_local)
         n = _rot(b, n_local)
         t = wall.thickness
-        # extend to close corners on joined segments
+        # Butt-joint corners: each segment owns the corner column at its START and stops
+        # short at its END, so no two faces are coplanar (no z-fighting seams in renders).
         ext0 = t / 2 if (wall.closed or si > 0) else 0.0
-        ext1 = t / 2 if (wall.closed or si < len(segs) - 1) else 0.0
+        ext1 = -t / 2 if (wall.closed or si < len(segs) - 1) else 0.0
         ops = wall_openings(level, wall, si)
         cursor = -ext0
         for o in ops:
@@ -211,6 +212,11 @@ def roof_faces(m: Model, b: Building, z_tow: float):
     minx, miny, maxx, maxy = fp.bounds
     oh = r.overhang
     axis = b.ridge_axis()
+    # frieze band closing the heel between top of wall and roof surface
+    if r.thickness > 0:
+        ring = fp.difference(fp.buffer(-0.2, join_style="mitre"))
+        add_prism(m, b.to_site(ring), z_tow, z_tow + r.thickness, facade, grp)
+    z_tow = z_tow + r.thickness
     # Work in a frame where the ridge runs along local "s" and slopes across "w".
     if axis == "x":
         s0, s1, w0, w1 = minx, maxx, miny, maxy
@@ -230,8 +236,9 @@ def roof_faces(m: Model, b: Building, z_tow: float):
         z_hi = z_tow + pitch * (w1 - w0 + oh)
         m.add([P(s0 - oh, w0 - oh, z_eave), P(s1 + oh, w0 - oh, z_eave),
                P(s1 + oh, w1 + oh, z_hi), P(s0 - oh, w1 + oh, z_hi)], mat, grp)
-        for s in (s0, s1):
-            m.add([P(s, w0, z_tow), P(s, w1, z_tow), P(s, w1, z_tow + pitch * (w1 - w0))], facade, grp)
+        for s, sgn in ((s0, -1), (s1, 1)):
+            tri = [P(s, w0, z_tow), P(s, w1, z_tow), P(s, w1, z_tow + pitch * (w1 - w0))]
+            m.add(tri if sgn > 0 else tri[::-1], facade, grp)
         add_prism_soffit(m, P, s0, s1, w0, w1, oh, z_eave)
         return
     z_ridge = z_tow + pitch * half
@@ -244,8 +251,9 @@ def roof_faces(m: Model, b: Building, z_tow: float):
             # fascia
             m.add([P(s0 - oh, we, z_eave - 0.2), P(s1 + oh, we, z_eave - 0.2),
                    P(s1 + oh, we, z_eave), P(s0 - oh, we, z_eave)], "frame_white", grp)
-        for s in (s0, s1):  # gable-end wall triangles
-            m.add([P(s, w0, z_tow), P(s, w1, z_tow), P(s, wc, z_ridge)], facade, grp)
+        for s, sgn in ((s0, -1), (s1, 1)):  # gable-end wall triangles, outward-facing
+            tri = [P(s, w0, z_tow), P(s, w1, z_tow), P(s, wc, z_ridge)]
+            m.add(tri if sgn > 0 else tri[::-1], facade, grp)
         add_prism_soffit(m, P, s0, s1, w0, w1, oh, z_eave)
     elif r.type == "hip":
         S0, S1, W0, W1 = s0 - oh, s1 + oh, w0 - oh, w1 + oh
@@ -292,7 +300,10 @@ def building_model(project: Project, ctx: SiteContext | None, m: Model | None = 
     mats = b.materials
     for lv in b.levels:
         z = ff + lv.elevation
-        add_prism(m, b.to_site(lv.footprint()), z - lv.slab, z, "slab", f"{lv.name}/slab")
+        # slab bears inside the exterior wall (edge hidden), like platform framing
+        inner = lv.footprint().buffer(-max(w.thickness for w in lv.walls if w.exterior) + 0.01,
+                                      join_style="mitre")
+        add_prism(m, b.to_site(inner), z - lv.slab, z, "slab", f"{lv.name}/slab")
         for w in lv.walls:
             add_wall(m, b, lv, w, z, mats)
     z_tow = ff + b.top_of_wall()

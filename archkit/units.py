@@ -38,7 +38,8 @@ def fmt_len(meters: float, system: str) -> str:
 
 def fmt_area(m2: float, system: str) -> str:
     if system == "imperial":
-        return f"{m2 / SQFT:,.0f} SF"
+        sf = m2 / SQFT
+        return f"{sf:,.1f} SF" if sf < 100 else f"{sf:,.0f} SF"
     return f"{m2:,.1f} m²"
 
 
@@ -76,8 +77,10 @@ def pick_scale(extent_w: float, extent_h: float, area_w: float, area_h: float,
     """Largest standard scale at which a model extent (m) fits a paper area (m)."""
     if system == "imperial":
         names = IMPERIAL_SITE if kind == "site" else IMPERIAL_ARCH
+        if kind == "plan":  # US convention: plans at 1/4" or smaller
+            names = IMPERIAL_ARCH[IMPERIAL_ARCH.index('1/4" = 1\'-0"'):]
     else:
-        names = METRIC
+        names = METRIC[2:] if kind == "plan" else METRIC  # 1:100 or smaller
     for name in names:  # ordered largest scale (most detail) first
         r = SCALES[name]
         if extent_w / r <= area_w and extent_h / r <= area_h:

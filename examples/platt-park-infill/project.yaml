@@ -1,0 +1,166 @@
+# archkit project spec — annotated example.
+# Real site: 1435 S Washington St, Denver CO (Platt Park).  Context (neighbouring
+# buildings, streets, terrain) is pulled live from OpenStreetMap + USGS 3DEP.
+#
+# COORDINATES: the site frame is metric-true (transverse Mercator at the site
+# origin) but expressed here in `project.units`.  +x = east, +y = north.
+# Origin = site.location.  All lengths below are in FEET.
+
+project:
+  name: Platt Park Infill Residence
+  number: "2026-014"
+  client: Example Client
+  architect: archkit Studio
+  units: ft                 # ft | m
+
+site:
+  address: 1435 S Washington St, Denver, CO 80210
+  location: {lat: 39.6904378, lon: -104.9795167}   # from Nominatim geocode
+  context_radius_m: 120
+  timezone: America/Denver   # IANA zone: sun/shadow times are local clock time incl. DST
+  elevation_source: auto    # USGS 3DEP 1 m (US) -> SRTM 30 m fallback
+  # PARCEL — APPROXIMATION for this example: Denver standard 50' x 125' lot with
+  # a 60' street right-of-way (front line 30' from the OSM street centreline at
+  # x = 63.3').  For real work replace with Denver Open Data parcel GeoJSON
+  # (geojson: parcel.geojson) or the surveyor's boundary.
+  parcel:
+    source: "APPROXIMATE - standard Denver lot; replace with county parcel/survey"
+    local:
+      - [33.3, -25.0]
+      - [33.3, 25.0]
+      - [-91.7, 25.0]
+      - [-91.7, -25.0]
+  # imports:                # authoritative data overrides OSM
+  #   - {path: parcel.geojson, kind: parcel, source: "Denver Open Data parcels 2026"}
+  #   - {path: footprints.geojson, kind: building, replace_osm: true, source: "Denver building outlines"}
+
+zoning:                     # VERIFY against Denver Zoning Code (U-SU-C assumed)
+  district: U-SU-C (assumed)
+  setbacks: {front: 20, side: 5, rear: 20}
+  max_height: 30
+  max_lot_coverage: 0.375
+
+code:
+  profile: IRC-2021         # IRC-2021 | IBC-2021 ; any rule can be overridden here
+
+building:
+  occupancy: R-3
+  construction_type: V-B
+  finish_floor: auto        # auto = 6" above highest adjacent grade
+  placement: {x: -41.075, y: -17.0, rotation_deg: 0}   # building-frame origin in site frame
+  materials:                # aliases into archkit/materials.py (or dicts of PBR params)
+    frame: frame_black
+    glazing: glass_lowe
+    door: wood_cedar
+  roof: {type: gable, pitch: "5:12", overhang: 1.5, ridge_axis: x, material: standing_seam, thickness: 0.83}
+  levels:
+    - name: Level 1
+      elevation: 0
+      floor_to_floor: 10
+      ceiling: 9
+      walls:
+        # Exterior: centreline rectangle, 9" wall.  Segment index order:
+        # 0 south (y=0, W->E) | 1 east/street (x=52, S->N) | 2 north (E->W) | 3 west/rear (N->S)
+        - {id: ext, exterior: true, closed: true, thickness: 0.75, material: brick_buff,
+           path: [[0, 0], [52, 0], [52, 34], [0, 34]]}
+        - {id: w1, thickness: 0.375, path: [[34, 0], [34, 34]]}
+        - {id: w2, thickness: 0.375, path: [[34, 21], [52, 21]]}
+        - {id: w3, thickness: 0.375, path: [[16, 0], [16, 34]]}
+      openings:   # offset = distance from segment start to the opening's near jamb
+        - {kind: door,   wall: ext, segment: 1, offset: 24, width: 3.5, height: 8, tag: D1, egress: true, swing: in-right}
+        - {kind: window, wall: ext, segment: 1, offset: 4,  width: 12, sill: 1.5, height: 6.5, tag: W1}
+        - {kind: window, wall: ext, segment: 0, offset: 20, width: 6, sill: 3, height: 5, tag: W2}
+        - {kind: window, wall: ext, segment: 0, offset: 38, width: 4, sill: 3, height: 5, tag: W3}
+        - {kind: window, wall: ext, segment: 2, offset: 22, width: 8, sill: 3.5, height: 4.5, tag: W4}
+        - {kind: door,   wall: ext, segment: 3, offset: 4,  width: 12, height: 8, tag: D2 glass slider, swing: slide}
+        - {kind: window, wall: ext, segment: 3, offset: 20, width: 8, sill: 2, height: 6, tag: W5}
+        - {kind: door,   wall: w1, segment: 0, offset: 4,  width: 10, height: 8, tag: CO1, swing: none}
+        - {kind: door,   wall: w1, segment: 0, offset: 22, width: 4,  height: 8, tag: CO2, swing: none}
+        - {kind: door,   wall: w2, segment: 0, offset: 6,  width: 8,  height: 8, tag: CO3, swing: none}
+        - {kind: door,   wall: w3, segment: 0, offset: 10, width: 14, height: 8, tag: CO4, swing: none}
+      rooms:
+        - {name: Living, number: "101", polygon: [[34, 0], [52, 0], [52, 21], [34, 21]]}
+        - {name: Entry, number: "102", use: circulation, polygon: [[34, 21], [52, 21], [52, 34], [34, 34]]}
+        - {name: Kitchen, number: "103", polygon: [[16, 14], [34, 14], [34, 34], [16, 34]]}
+        - {name: Dining, number: "104", polygon: [[16, 0], [34, 0], [34, 14], [16, 14]]}
+        - {name: Family, number: "105", polygon: [[0, 0], [16, 0], [16, 34], [0, 34]]}
+      stairs:
+        - {start: [36, 30.4], direction_deg: 0, width: 3.2, risers: 16, riser: 0.625, tread: 0.8333}
+    - name: Level 2
+      elevation: 10
+      floor_to_floor: 10
+      ceiling: 9
+      walls:
+        - {id: ext, exterior: true, closed: true, thickness: 0.75, material: fiber_cement,
+           path: [[0, 0], [52, 0], [52, 34], [0, 34]]}
+        - {id: a, thickness: 0.375, path: [[20, 0], [20, 34]]}
+        - {id: b, thickness: 0.375, path: [[0, 20], [20, 20]]}
+        - {id: c, thickness: 0.375, path: [[20, 14], [36, 14]]}
+        - {id: d, thickness: 0.375, path: [[36, 0], [36, 16]]}
+        - {id: e, thickness: 0.375, path: [[36, 16], [52, 16]]}
+        - {id: f, thickness: 0.375, path: [[20, 24], [36, 24]]}
+        - {id: g, thickness: 0.375, path: [[30, 24], [30, 34]]}
+      openings:
+        - {kind: door, wall: a, segment: 0, offset: 15, width: 3, height: 6.67, tag: "201", swing: in-left}
+        - {kind: door, wall: b, segment: 0, offset: 14, width: 2.67, height: 6.67, tag: "202", swing: in-right}
+        - {kind: door, wall: c, segment: 0, offset: 10, width: 2.67, height: 6.67, tag: "204", swing: in-left}
+        - {kind: door, wall: e, segment: 0, offset: 2, width: 2.67, height: 6.67, tag: "203", swing: in-right}
+        - {kind: door, wall: f, segment: 0, offset: 2, width: 2.5, height: 6.67, tag: "205", swing: in-left}
+        - {kind: door, wall: f, segment: 0, offset: 9, width: 2.5, height: 6.67, tag: "206", swing: in-right}
+        - {kind: window, wall: ext, segment: 0, offset: 6,  width: 6, sill: 2.5, height: 5, tag: W6}
+        - {kind: window, wall: ext, segment: 0, offset: 24, width: 5, sill: 2.5, height: 5, tag: W7}
+        - {kind: window, wall: ext, segment: 0, offset: 42, width: 5, sill: 2.5, height: 5, tag: W8}
+        - {kind: window, wall: ext, segment: 1, offset: 4,  width: 8, sill: 2.5, height: 5.5, tag: W9}
+        - {kind: window, wall: ext, segment: 1, offset: 22, width: 6, sill: 3, height: 5, tag: W10}
+        - {kind: window, wall: ext, segment: 2, offset: 24, width: 3, sill: 4.5, height: 3, tag: W11, operable: false}
+        - {kind: window, wall: ext, segment: 2, offset: 40, width: 4, sill: 4.5, height: 3, tag: W12, operable: false}
+        - {kind: window, wall: ext, segment: 3, offset: 20, width: 8, sill: 2.5, height: 5.5, tag: W13}
+      rooms:
+        - {name: Primary Bedroom, number: "201", use: sleeping, polygon: [[0, 0], [20, 0], [20, 20], [0, 20]]}
+        - {name: Primary Bath, number: "202", use: bath, polygon: [[0, 20], [20, 20], [20, 34], [0, 34]]}
+        - {name: Bedroom 2, number: "203", use: sleeping, polygon: [[36, 0], [52, 0], [52, 16], [36, 16]]}
+        - {name: Bedroom 3, number: "204", use: sleeping, polygon: [[20, 0], [36, 0], [36, 14], [20, 14]]}
+        - {name: Bath, number: "205", use: bath, polygon: [[20, 24], [30, 24], [30, 34], [20, 34]]}
+        - {name: Laundry, number: "206", use: other, polygon: [[30, 24], [36, 24], [36, 34], [30, 34]]}
+        - {name: Hall, number: "207", use: circulation,
+           polygon: [[20, 14], [36, 14], [36, 16], [52, 16], [52, 34], [36, 34], [36, 24], [20, 24]]}
+
+views:
+  # eye/target: [x, y, z] in feet; z is height ABOVE LOCAL GRADE at that x,y.
+  - name: street-view
+    eye: [80, -55, 5.5]       # east sidewalk of S Washington St, looking NW
+    target: [-5, -2, 13]
+    focal_mm: 24
+    datetime: "2026-06-21T09:30:00"
+    resolution: [3840, 2160]
+    samples: 256
+  - name: aerial
+    eye: [170, -190, 140]
+    target: [-25, 0, 8]
+    focal_mm: 35
+    datetime: "2026-09-22T15:00:00"
+    resolution: [3840, 2160]
+    samples: 256
+  - name: rear-yard
+    eye: [-88, 22, 5.5]
+    target: [-25, -6, 12]
+    focal_mm: 24
+    datetime: "2026-06-21T17:30:00"
+    resolution: [3840, 2160]
+    samples: 256
+  # Photomontage (verified view): add a site photo and >= 6 control points
+  # whose site coordinates you know (survey shots, kerb corners, neighbour corners):
+  # - name: verified-view-1
+  #   background_photo: photos/IMG_0412.jpg
+  #   camera_solve:
+  #     image_size: [6000, 4000]
+  #     points:
+  #       - {px: [1234, 2210], site: [33.3, -25.0, 0.0]}
+  #       - ...
+
+sheet:
+  size: ARCH-D              # ARCH-D | ARCH-C | ARCH-E1 | ANSI-B | ANSI-D | A0..A3
+  issue: SCHEMATIC DESIGN
+  notes:
+    - "Lot lines approximate (standard Denver lot); obtain boundary survey."
+    - "Existing structure at 1435 S Washington St to be demolished."

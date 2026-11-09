@@ -85,6 +85,20 @@ class SiteContext:
         if not self.elevation or not self.elevation.get("grid"):
             return 0.0
         z0 = self.elevation["origin_m"]
+        lut = self._grid_lut()
+        if lut is not None:
+            xs, ys, Z = lut
+            import numpy as np
+
+            x = min(max(x, xs[0]), xs[-1])
+            y = min(max(y, ys[0]), ys[-1])
+            i = min(int(np.searchsorted(xs, x, side="right")) - 1, len(xs) - 2)
+            j = min(int(np.searchsorted(ys, y, side="right")) - 1, len(ys) - 2)
+            tx = (x - xs[i]) / (xs[i + 1] - xs[i])
+            ty = (y - ys[j]) / (ys[j + 1] - ys[j])
+            z = (Z[j, i] * (1 - tx) * (1 - ty) + Z[j, i + 1] * tx * (1 - ty)
+                 + Z[j + 1, i] * (1 - tx) * ty + Z[j + 1, i + 1] * tx * ty)
+            return float(z) - z0
         num = den = 0.0
         for gx, gy, gz in self.elevation["grid"]:
             d2 = (gx - x) ** 2 + (gy - y) ** 2
@@ -94,6 +108,24 @@ class SiteContext:
             num += w * gz
             den += w
         return num / den - z0
+
+    def _grid_lut(self):
+        """Regular-grid lookup (xs, ys, Z) for bilinear interpolation, or None."""
+        cached = getattr(self, "_lut", "unset")
+        if cached != "unset":
+            return cached
+        import numpy as np
+
+        g = np.asarray(self.elevation["grid"], float)
+        xs, ys = np.unique(np.round(g[:, 0], 3)), np.unique(np.round(g[:, 1], 3))
+        self._lut = None
+        if len(xs) >= 2 and len(ys) >= 2 and len(xs) * len(ys) == len(g):
+            Z = np.full((len(ys), len(xs)), np.nan)
+            for x, y, z in g:
+                Z[np.searchsorted(ys, round(y, 3)), np.searchsorted(xs, round(x, 3))] = z
+            if not np.isnan(Z).any():
+                self._lut = (xs, ys, Z)
+        return self._lut
 
     # ---- persistence ---------------------------------------------------
     def to_json(self) -> dict:
@@ -271,17 +303,70 @@ def _keep(tags: dict) -> dict:
     return {k: tags[k] for k in keys if k in tags}
 
 
+def osm_xml_to_elements(xml_text: str) -> dict:
+    """Convert OSM API 0.6 XML into Overpass-style JSON (`out geom`) elements."""
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(xml_text)
+    nodes = {}
+    els = []
+    for nd in root.iter("node"):
+        nodes[nd.get("id")] = (float(nd.get("lat")), float(nd.get("lon")))
+        tags = {t.get("k"): t.get("v") for t in nd.iter("tag")}
+        if tags:
+            els.append({"type": "node", "id": int(nd.get("id")), "lat": nodes[nd.get("id")][0],
+                        "lon": nodes[nd.get("id")][1], "tags": tags})
+    ways = {}
+    for w in root.iter("way"):
+        refs = [r.get("ref") for r in w.iter("nd")]
+        geom = [{"lat": nodes[r][0], "lon": nodes[r][1]} for r in refs if r in nodes]
+        tags = {t.get("k"): t.get("v") for t in w.iter("tag")}
+        ways[w.get("id")] = geom
+        if len(geom) == len(refs) and len(geom) >= 2:
+            els.append({"type": "way", "id": int(w.get("id")), "tags": tags, "geometry": geom})
+    for r in root.iter("relation"):
+        tags = {t.get("k"): t.get("v") for t in r.iter("tag")}
+        if "building" not in tags:
+            continue
+        members = [{"type": m.get("type"), "role": m.get("role"), "geometry": ways[m.get("ref")]}
+                   for m in r.iter("member") if m.get("type") == "way" and m.get("ref") in ways]
+        els.append({"type": "relation", "id": int(r.get("id")), "tags": tags, "members": members})
+    return {"elements": els}
+
+
+def _fetch_osm_api(frame: LocalFrame, radius_m: float) -> dict:
+    """Fallback: official OSM editing API (bbox must be < 0.25 deg^2; fine for sites)."""
+    import requests
+
+    from .geo import USER_AGENT, _cache_get, _cache_put
+
+    s, w, n, e = frame.bbox_lonlat(radius_m)
+    url = f"https://api.openstreetmap.org/api/0.6/map?bbox={w:.6f},{s:.6f},{e:.6f},{n:.6f}"
+    cached = _cache_get(url)
+    if cached is not None:
+        return cached
+    r = requests.get(url, timeout=120, headers={"User-Agent": USER_AGENT})
+    r.raise_for_status()
+    data = osm_xml_to_elements(r.text)
+    _cache_put(url, data)
+    return data
+
+
 def fetch_osm(frame: LocalFrame, radius_m: float) -> list[Feature]:
     s, w, n, e = frame.bbox_lonlat(radius_m)
     q = _overpass_query(s, w, n, e)
-    last = None
+    errors = []
     for url in OVERPASS_URLS:
         try:
-            data = http_json(url, data={"data": q}, timeout=180)
+            data = http_json(url, data={"data": q}, timeout=180, retries=2)
             return parse_osm(data, frame)
         except RuntimeError as err:
-            last = err
-    raise RuntimeError(f"Overpass unavailable: {last}")
+            errors.append(str(err))
+    try:
+        return parse_osm(_fetch_osm_api(frame, radius_m), frame)
+    except Exception as err:  # noqa: BLE001
+        errors.append(f"OSM API: {err}")
+    raise RuntimeError("OpenStreetMap unavailable: " + " | ".join(errors))
 
 
 # ---------------------------------------------------------------------------
@@ -310,8 +395,11 @@ def fetch_elevation(frame: LocalFrame, radius_m: float, n: int = 9,
         try:
             z0 = _usgs_point(frame.lon0, frame.lat0)
             if z0 is not None:
-                for (x, y), (lon, lat) in zip(pts, lonlat):
-                    z = _usgs_point(lon, lat)
+                from concurrent.futures import ThreadPoolExecutor
+
+                with ThreadPoolExecutor(max_workers=8) as ex:
+                    zs = list(ex.map(lambda ll: _usgs_point(*ll), lonlat))
+                for (x, y), z in zip(pts, zs):
                     if z is not None:
                         grid.append([x, y, z])
                 used = "USGS 3DEP (1 m DEM) via EPQS"

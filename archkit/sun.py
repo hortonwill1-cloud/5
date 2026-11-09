@@ -84,10 +84,18 @@ def sun_vector(az_deg: float, el_deg: float) -> tuple[float, float, float]:
     return (math.sin(a) * math.cos(e), math.cos(a) * math.cos(e), math.sin(e))
 
 
-def parse_when(s: str, utc_offset_h: float) -> datetime:
+def local_tz(tz_name: str | None, utc_offset_h: float | None):
+    """IANA zone (handles daylight saving correctly) or a fixed offset."""
+    if tz_name:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(tz_name)
+    return timezone(timedelta(hours=utc_offset_h or 0.0))
+
+
+def parse_when(s: str, utc_offset_h: float | None, tz_name: str | None = None) -> datetime:
     dt = datetime.fromisoformat(s)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone(timedelta(hours=utc_offset_h)))
+        dt = dt.replace(tzinfo=local_tz(tz_name, utc_offset_h))
     return dt
 
 
