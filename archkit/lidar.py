@@ -267,6 +267,69 @@ def roof_surface(poly, pts_struct: np.ndarray, pts_ground: np.ndarray, cell: flo
             "z": [round(float(v), 2) for v in z.ravel()]}
 
 
+def fit_roof(poly, grid: dict, ground_abs: float, max_rms: float = 0.35,
+             min_inliers: float = 0.6) -> dict | None:
+    """Fit flat / gable / hip / shed roof to a LiDAR roof grid.  Returns params or None
+    (complex roof: keep the measured surface).  Heights absolute (same datum as grid)."""
+    import shapely
+
+    mrr = poly.minimum_rotated_rectangle
+    c = list(mrr.exterior.coords)[:4]
+    e1 = np.subtract(c[1], c[0])
+    e2 = np.subtract(c[2], c[1])
+    if np.linalg.norm(e1) < np.linalg.norm(e2):
+        e1, e2 = e2, e1
+    L, W = float(np.linalg.norm(e1)), float(np.linalg.norm(e2))
+    if W < 3 or poly.area / mrr.area < 0.8:
+        return None
+    u = e1 / L
+    v = np.array([-u[1], u[0]])
+    cx, cy = mrr.centroid.x, mrr.centroid.y
+    nx, ny, cell = grid["nx"], grid["ny"], grid["cell"]
+    xs = grid["x0"] + np.arange(nx) * cell
+    ys = grid["y0"] + np.arange(ny) * cell
+    X, Y = np.meshgrid(xs, ys)
+    Z = np.asarray(grid["z"]).reshape(ny, nx)
+    inner = poly.buffer(-0.6)
+    if inner.is_empty:
+        return None
+    m = shapely.contains_xy(inner, X.ravel(), Y.ravel())
+    if m.sum() < 8:
+        return None
+    px, py, pz = X.ravel()[m] - cx, Y.ravel()[m] - cy, Z.ravel()[m]
+    s_, t_ = px * u[0] + py * u[1], px * v[0] + py * v[1]
+    d_gable = W / 2 - np.abs(t_)
+    d_hip = np.minimum(W / 2 - np.abs(t_), L / 2 - np.abs(s_))
+    feats = {"flat": None, "gable": d_gable, "hip": d_hip, "shed": t_ + W / 2}
+    best = None
+    for name, f in feats.items():
+        A = np.ones((len(pz), 1)) if f is None else np.column_stack([np.ones(len(pz)), f])
+        keep = np.ones(len(pz), bool)
+        for _ in range(6):  # trimmed least squares: drop ground-hit edge cells & foliage
+            coef, *_ = np.linalg.lstsq(A[keep], pz[keep], rcond=None)
+            res = np.abs(A @ coef - pz)
+            thr = max(0.3, 2.5 * 1.4826 * np.median(res[keep]))
+            new_keep = res < thr
+            if new_keep.sum() < 8 or (new_keep == keep).all():
+                break
+            keep = new_keep
+        inl = keep.mean()
+        rms = float(np.sqrt(np.mean(res[keep] ** 2)))
+        k = float(coef[1]) if f is not None else 0.0
+        if f is not None and not (0.05 < k < 1.6):  # 0.6:12 .. 19:12
+            continue
+        if inl < min_inliers:
+            continue
+        penalty = {"flat": 0.0, "gable": 0.04, "hip": 0.06, "shed": 0.08}[name] + 0.3 * (1 - inl)
+        if best is None or rms + penalty < best[0]:
+            best = (rms + penalty, rms, name, float(coef[0]), k, inl)
+    if best is None or best[1] > max_rms or best[3] - ground_abs < 2.0:
+        return None
+    _, rms, name, e, k, inl = best
+    return {"type": name, "eave": e, "pitch": k, "u": u.tolist(), "center": [cx, cy],
+            "L": L, "W": W, "rms": round(rms, 3), "inliers": round(float(inl), 2)}
+
+
 def detect_trees(pts: np.ndarray, ground_fn, radius_m: float, cell: float = 1.5,
                  min_h: float = 4.0) -> list[dict]:
     v = pts
@@ -347,6 +410,22 @@ def apply_to_context(ctx, spacing_m: float = 0.5, project: str | None = None,
         top = float(np.nanpercentile(zs, 98)) - gz_abs
         if top < 1.5:
             continue
+        if len(grids) == 1 and len(polys) == 1:
+            fit = fit_roof(polys[0], grids[0], gz_abs)
+            if fit is None and g.area < 600:
+                # houses/garages: a clean approximate roof reads better than noisy truth
+                fit = fit_roof(polys[0], grids[0], gz_abs, max_rms=1.5, min_inliers=0.35)
+                if fit is None:
+                    z = np.asarray(grids[0]["z"])
+                    fit = {"type": "flat", "eave": float(np.nanpercentile(z, 60)), "pitch": 0.0,
+                           "u": [1.0, 0.0], "center": [g.centroid.x, g.centroid.y],
+                           "L": 1.0, "W": 1.0, "rms": None, "inliers": None}
+                fit["approximate"] = True
+            if fit:
+                f.props["roof_fit"] = fit
+                peak = fit["eave"] + fit["pitch"] * (fit["W"] if fit["type"] == "shed" else
+                                                     fit["W"] / 2 if fit["type"] != "flat" else 0)
+                top = peak - gz_abs
         f.props["height_m"] = round(top, 2)
         f.props["height_source"] = f"LiDAR (3DEP {proj})"
         f.props["roof_grids"] = grids

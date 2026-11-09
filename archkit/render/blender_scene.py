@@ -30,7 +30,83 @@ def set_input(node, names, value):
     return False
 
 
+def make_textured(name, p, t):
+    """PBR material from scanned maps, box-projected at true real-world scale."""
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nodes, links = nt.nodes, nt.links
+    bsdf = nodes.get("Principled BSDF")
+    texco = nodes.new("ShaderNodeTexCoord")
+    mapping = nodes.new("ShaderNodeMapping")
+    sx, sy = t["size_m"]
+    mapping.inputs["Scale"].default_value = (1.0 / sx, 1.0 / sx, 1.0 / sy)
+    links.new(texco.outputs["Object"], mapping.inputs["Vector"])
+
+    def img(path, noncolor=False):
+        n = nodes.new("ShaderNodeTexImage")
+        n.image = bpy.data.images.load(path, check_existing=True)
+        if noncolor:
+            n.image.colorspace_settings.name = "Non-Color"
+        n.projection = "BOX"
+        n.projection_blend = 0.25
+        links.new(mapping.outputs["Vector"], n.inputs["Vector"])
+        return n
+
+    col = img(t["diffuse"]).outputs["Color"]
+    if t.get("recolor"):
+        bw = nodes.new("ShaderNodeRGBToBW")
+        links.new(col, bw.inputs[0])
+        mul = nodes.new("ShaderNodeMath")
+        mul.operation = "MULTIPLY"
+        mul.inputs[1].default_value = 1 / 0.45
+        links.new(bw.outputs[0], mul.inputs[0])
+        mix = nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
+        mix.blend_type = "MULTIPLY"
+        mix.inputs["Factor"].default_value = 1.0
+        mix.inputs[6].default_value = tuple(t["recolor"]) + (1.0,)
+        comb = nodes.new("ShaderNodeCombineColor")
+        for i in range(3):
+            links.new(mul.outputs[0], comb.inputs[i])
+        links.new(comb.outputs[0], mix.inputs[7])
+        col = mix.outputs[2]
+    if t.get("mult"):
+        mix = nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
+        mix.blend_type = "MULTIPLY"
+        mix.inputs["Factor"].default_value = 1.0
+        links.new(col, mix.inputs[6])
+        mix.inputs[7].default_value = tuple(t["mult"]) + (1.0,)
+        col = mix.outputs[2]
+    links.new(col, bsdf.inputs["Base Color"])
+    set_input(bsdf, "Metallic", p.get("metal", 0.0))
+    if t.get("rough"):
+        links.new(img(t["rough"], True).outputs["Color"], bsdf.inputs["Roughness"])
+    else:
+        set_input(bsdf, "Roughness", p.get("rough", 0.6))
+    normal_out = None
+    if t.get("normal"):
+        nm = nodes.new("ShaderNodeNormalMap")
+        links.new(img(t["normal"], True).outputs["Color"], nm.inputs["Color"])
+        normal_out = nm.outputs["Normal"]
+    if t.get("disp"):
+        bump = nodes.new("ShaderNodeBump")
+        set_input(bump, "Strength", 0.35)
+        set_input(bump, "Distance", 0.01)
+        links.new(img(t["disp"], True).outputs["Color"], bump.inputs["Height"])
+        if normal_out is not None:
+            links.new(normal_out, bump.inputs["Normal"])
+        normal_out = bump.outputs["Normal"]
+    if normal_out is not None:
+        links.new(normal_out, bsdf.inputs["Normal"])
+    return mat
+
+
 def make_material(name, p):
+    tex = job.get("textures", {}).get(name)
+    if tex:
+        return make_textured(name, p, tex)
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     nt = mat.node_tree
@@ -119,6 +195,10 @@ def organic_trees(ob):
     bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.001)  # weld so displacement stays closed
     bm.to_mesh(ob.data)
     bm.free()
+    vg = ob.vertex_groups.new(name="crown")
+    crown_idx = {i for i, sl in enumerate(ob.material_slots) if sl.material and "crown" in sl.material.name}
+    verts = {v for poly in ob.data.polygons if poly.material_index in crown_idx for v in poly.vertices}
+    vg.add(list(verts), 1.0, "REPLACE")
     sub = ob.modifiers.new("Subdiv", "SUBSURF")
     sub.levels = sub.render_levels = 2
     tex = bpy.data.textures.new("crown_noise", "CLOUDS")
@@ -129,6 +209,7 @@ def organic_trees(ob):
     disp.texture_coords = "GLOBAL"
     disp.strength = 1.4
     disp.mid_level = 0.55
+    disp.vertex_group = "crown"
     tex2 = bpy.data.textures.new("leaf_noise", "CLOUDS")
     tex2.noise_scale = 0.45
     tex2.noise_depth = 2
@@ -136,8 +217,71 @@ def organic_trees(ob):
     d2.texture = tex2
     d2.texture_coords = "GLOBAL"
     d2.strength = 0.5
+    d2.vertex_group = "crown"
     for poly in ob.data.polygons:
         poly.use_smooth = True
+
+
+def remove_sun(path, probe, out_path):
+    """Paint the sun out of an equirect HDRI (replaced by surrounding sky radiance)."""
+    import os
+
+    import numpy as np
+    if os.path.exists(out_path):
+        return bpy.data.images.load(out_path)
+    img = bpy.data.images.load(path)
+    W, H = img.size
+    px = np.empty(W * H * 4, np.float32)
+    img.pixels.foreach_get(px)
+    a = px.reshape(H, W, 4)
+    el, phi = math.radians(probe["el_deg"]), math.radians(probe["phi_deg"])
+    rows = (np.arange(H) + 0.5) / H * math.pi - math.pi / 2
+    cols = (0.5 - (np.arange(W) + 0.5) / W) * 2 * math.pi
+    cosd = (np.sin(rows)[:, None] * math.sin(el)
+            + np.cos(rows)[:, None] * math.cos(el) * np.cos(cols[None, :] - phi))
+    ang = np.degrees(np.arccos(np.clip(cosd, -1, 1)))
+    ring = (ang > 6) & (ang < 12)
+    bg = np.median(a[ring][:, :3], 0)
+    disc = ang < 6
+    w = np.clip((6 - ang) / 2, 0, 1)[..., None]   # feathered edge
+    a[..., :3] = np.where(disc[..., None], a[..., :3] * (1 - w) + bg * w, a[..., :3])
+    img.pixels.foreach_set(a.ravel())
+    img.filepath_raw = out_path
+    img.file_format = "HDR"
+    img.save()
+    return img
+
+
+def build_hdri_world(sky, sun_az, sun_el):
+    world = bpy.data.worlds.new("HDRI")
+    bpy.context.scene.world = world
+    world.use_nodes = True
+    nt = world.node_tree
+    bg = nt.nodes.get("Background")
+    env = nt.nodes.new("ShaderNodeTexEnvironment")
+    env.image = remove_sun(sky["path"], sky["probe"], sky["path"].replace(".hdr", "_nosun.hdr"))
+    texco = nt.nodes.new("ShaderNodeTexCoord")
+    mapping = nt.nodes.new("ShaderNodeMapping")
+    mapping.vector_type = "POINT"
+    # world direction with atan2(y,x) = phi_t must look up the image sun at phi_img
+    phi_t = math.radians(90.0 - sun_az)
+    mapping.inputs["Rotation"].default_value = (0, 0, math.radians(sky["probe"]["phi_deg"]) - phi_t)
+    nt.links.new(texco.outputs["Generated"], mapping.inputs["Vector"])
+    nt.links.new(mapping.outputs["Vector"], env.inputs["Vector"])
+    nt.links.new(env.outputs["Color"], bg.inputs["Color"])
+    bg.inputs["Strength"].default_value = 1.0
+    # exact sun
+    if sky["sun_strength"] > 0 and sun_el > 0:
+        ld = bpy.data.lights.new("Sun", "SUN")
+        ld.energy = sky["sun_strength"]
+        ld.angle = math.radians(0.53)
+        sun = bpy.data.objects.new("Sun", ld)
+        bpy.context.collection.objects.link(sun)
+        a, e = math.radians(sun_az), math.radians(sun_el)
+        v = Vector((math.sin(a) * math.cos(e), math.cos(a) * math.cos(e), math.sin(e)))
+        sun.rotation_euler = v.to_track_quat("Z", "Y").to_euler()
+    e_h = sky["sun_strength"] * max(math.sin(math.radians(sun_el)), 0) + sky["probe"]["e_sky_h"]
+    return math.log2(math.pi / max(e_h, 1e-6))
 
 
 def build_world(sun_az, sun_el):
@@ -203,7 +347,11 @@ def main():
                 ob.is_shadow_catcher = True
         if "trees" in name:
             organic_trees(ob)
-    build_world(job["sun_az"], job["sun_el"])
+    auto_ev = None
+    if job.get("sky"):
+        auto_ev = build_hdri_world(job["sky"], job["sun_az"], job["sun_el"])
+    else:
+        build_world(job["sun_az"], job["sun_el"])
     setup_camera(job["camera"])
 
     scene.render.engine = "CYCLES"
@@ -252,7 +400,11 @@ def main():
             break
         except TypeError:
             continue
-    vs.exposure = job.get("exposure", 0.0)
+    if auto_ev is not None:
+        vs.exposure = auto_ev + job.get("exposure_offset", 0.0)
+        print("AUTO_EV", vs.exposure)
+    else:
+        vs.exposure = job.get("exposure", 0.0)
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGBA" if job.get("photomontage") else "RGB"
     scene.render.image_settings.color_depth = "16"

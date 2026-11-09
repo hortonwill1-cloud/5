@@ -432,6 +432,10 @@ def lidar_building(m: Model, f, ctx: SiteContext, mat: str = "context",
     g = f.geom
     parts = list(g.geoms) if g.geom_type == "MultiPolygon" else [g]
     datum = f.props.get("z_datum", 0.0)
+    fit = f.props.get("roof_fit")
+    if fit:
+        _fitted_building(m, parts[0], fit, datum, ctx, mat, roof_mat, group)
+        return
     for r in f.props["roof_grids"]:
         poly = parts[r.get("part", 0)]
         zf = _grid_sampler(r, datum)
@@ -461,6 +465,58 @@ def lidar_building(m: Model, f, ctx: SiteContext, mat: str = "context",
             for (ax, ay), (bx, by) in zip(co[:-1], co[1:]):
                 ga, gb = ctx.ground_z(ax, ay) - 0.3, ctx.ground_z(bx, by) - 0.3
                 m.add([[ax, ay, ga], [bx, by, gb], [bx, by, zf(bx, by)], [ax, ay, zf(ax, ay)]], mat, group)
+
+
+def _fitted_building(m, poly, fit, datum, ctx, mat, roof_mat, group):
+    """Clean walls + analytic roof (flat/gable/hip/shed) fitted to LiDAR, with ridge/hip edges."""
+    from shapely.geometry import LineString
+    from shapely.ops import triangulate as dtri
+
+    u = np.asarray(fit["u"])
+    v = np.array([-u[1], u[0]])
+    cx, cy = fit["center"]
+    L, W, k, e = fit["L"], fit["W"], fit["pitch"], fit["eave"] - datum
+    kind = fit["type"]
+
+    def zf(x, y):
+        s_ = (x - cx) * u[0] + (y - cy) * u[1]
+        t_ = (x - cx) * v[0] + (y - cy) * v[1]
+        if kind == "flat":
+            return e
+        if kind == "gable":
+            return e + k * max(W / 2 - abs(t_), 0)
+        if kind == "shed":
+            return e + k * min(max(t_ + W / 2, 0), W)
+        return e + k * max(min(W / 2 - abs(t_), L / 2 - abs(s_)), 0)
+
+    C = np.array([cx, cy])
+    lines = []
+    if kind == "gable":
+        lines.append([C - u * L, C + u * L])
+    elif kind == "hip":
+        r = max(L / 2 - W / 2, 0)
+        a, b = C - u * r, C + u * r
+        lines.append([a, b])
+        for p0, sgn_u in ((a, -1), (b, 1)):
+            for sgn_v in (-1, 1):
+                lines.append([p0, p0 + (u * sgn_u + v * sgn_v) * W])
+    pts = list(poly.exterior.segmentize(2.0).coords)[:-1]
+    for ln in lines:
+        seg = LineString(ln).intersection(poly)
+        for gg in getattr(seg, "geoms", [seg]):
+            if gg.length > 0:
+                pts += list(gg.segmentize(1.0).coords)
+    for t in dtri(MultiPoint(pts)):
+        if not poly.contains(t.centroid):
+            continue
+        cc = np.asarray(t.exterior.coords)[:3]
+        if (cc[1, 0] - cc[0, 0]) * (cc[2, 1] - cc[0, 1]) - (cc[2, 0] - cc[0, 0]) * (cc[1, 1] - cc[0, 1]) < 0:
+            cc = cc[::-1]
+        m.add([[x, y, zf(x, y)] for x, y in cc], roof_mat, group)
+    co = list(poly.exterior.segmentize(2.0).coords)
+    for (ax, ay), (bx, by) in zip(co[:-1], co[1:]):
+        ga, gb = ctx.ground_z(ax, ay) - 0.3, ctx.ground_z(bx, by) - 0.3
+        m.add([[ax, ay, ga], [bx, by, gb], [bx, by, zf(bx, by)], [ax, ay, zf(ax, ay)]], mat, group)
 
 
 def full_model(project: Project, ctx: SiteContext | None) -> Model:

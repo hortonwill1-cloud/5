@@ -182,6 +182,9 @@ class View:
     background_photo: str | None = None
     camera_solve: dict | None = None     # {"photo":..., "points":[{"px":[u,v],"site":[x,y,z]}...]}
     samples: int = 512
+    sky: str = "partly_cloudy"         # physical | clear | partly_cloudy | overcast (HDRI)
+    textures: bool = True              # scanned PBR textures (Poly Haven, CC0)
+    exposure_offset: float = 0.0       # EV relative to automatic exposure
 
 
 @dataclass
@@ -320,7 +323,9 @@ def load(path: str | Path) -> Project:
             utc_offset_h=float(v.get("utc_offset_h", 0)),
             background_photo=(str((path.parent / v["background_photo"]).resolve())
                               if v.get("background_photo") else None),
-            camera_solve=v.get("camera_solve"), samples=int(v.get("samples", 512))))
+            camera_solve=v.get("camera_solve"), samples=int(v.get("samples", 512)),
+            sky=v.get("sky", "partly_cloudy"), textures=bool(v.get("textures", True)),
+            exposure_offset=float(v.get("exposure_offset", 0.0))))
 
     zoning = dict(d.get("zoning", {}))
     for key in ("max_height",):

@@ -88,6 +88,16 @@ def render_blender(project: Project, ctx: SiteContext | None, model: Model, v: V
     }
     if save_blend:
         job["save_blend"] = str((outdir / f"{v.name}.blend").resolve())
+    if v.textures:
+        from ..assets import textures_for
+        job["textures"] = textures_for(used, "4k" if percent >= 100 else "2k")
+    if v.sky != "physical" and el > 0:
+        from ..assets import choose_sky
+        try:
+            job["sky"] = choose_sky(el, blender, v.sky, "4k" if percent >= 100 else "2k")
+            job["exposure_offset"] = v.exposure_offset
+        except Exception as e:  # noqa: BLE001
+            print(f"  HDRI sky unavailable ({e}); using physical sky")
     jp = outdir / f"{v.name}.job.json"
     jp.write_text(json.dumps(job, indent=1))
     script = Path(__file__).with_name("blender_scene.py")
@@ -98,6 +108,10 @@ def render_blender(project: Project, ctx: SiteContext | None, model: Model, v: V
         raise RuntimeError(f"Blender failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}")
     if v.background_photo:
         out = composite(out, Path(v.background_photo), outdir / f"{v.name}-photomontage.png")
+    if job.get("sky"):
+        info["sky_hdri"] = job["sky"]["slug"]
+        info["sky_sun_elevation_mismatch_deg"] = job["sky"]["elev_mismatch_deg"]
+        info["shadows"] = "exact sun lamp at computed position (HDRI sun removed)"
     _write_metadata(project, v, cam, info, az, el, outdir)
     return out
 
