@@ -110,7 +110,7 @@ def drape_ortho(mat):
     """Replace base colour with the georeferenced aerial photo (soft-light blended with the
     material's own fine detail), falling back to the material where the mask is black."""
     o = job.get("ortho")
-    if not o or mat.name.split(".")[0] not in ORTHO_MATS:
+    if not o or mat.name.split(".")[0] not in set(o.get("materials", ORTHO_MATS)):
         return
     nt = mat.node_tree
     nodes, links = nt.nodes, nt.links

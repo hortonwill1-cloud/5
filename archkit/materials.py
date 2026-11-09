@@ -38,7 +38,7 @@ LIB: dict[str, dict] = {
     "standing_seam": {"base": (0.12, 0.13, 0.14), "rough": 0.35, "metal": 1.0, "boards": 0.45},
     "slab":          {"base": (0.50, 0.49, 0.47), "rough": 0.8},
     # --- site / context --------------------------------------------------
-    "context":       {"base": (0.50, 0.49, 0.47), "rough": 0.85},
+    "context":       {"base": (0.36, 0.355, 0.345), "rough": 0.85},
     "context_roof":  {"base": (0.45, 0.45, 0.45), "rough": 0.85},
     "asphalt":       {"base": (0.07, 0.07, 0.075), "rough": 0.90, "bump": 0.3, "noise": 0.06},
     "sidewalk":      {"base": (0.50, 0.49, 0.47), "rough": 0.85, "noise": 0.05},

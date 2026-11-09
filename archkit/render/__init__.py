@@ -85,7 +85,7 @@ def render_blender(project: Project, ctx: SiteContext | None, model: Model, v: V
         "samples": samples or v.samples,
         "photomontage": bool(v.background_photo),
         "exposure": exposure if exposure is not None else project.sheet.get("render_exposure", -4.5),
-        "exposure_offset": v.exposure_offset - 0.4,
+        "exposure_offset": v.exposure_offset,
         "out": str((outdir / f"{v.name}.png").resolve()),
     }
     if save_blend:
@@ -107,8 +107,13 @@ def render_blender(project: Project, ctx: SiteContext | None, model: Model, v: V
                 polys += [st.bowl_polygon(fieldg, s_).buffer(1.0) for s_ in secs]
             if polys:
                 o["mask"] = mask_for(o, polys, outdir / "model" / "ortho_mask.png")
+            # Eye-level views: an overhead photo shows tree canopy over streets and baked
+            # shade, so drape it on roofs only; elevated/aerial views use it everywhere.
+            eye_agl = cam.eye[2] - ctx.ground_z(cam.eye[0], cam.eye[1])
+            o["materials"] = (["context_roof"] if eye_agl < 20 else
+                              ["terrain", "grass", "asphalt", "sidewalk", "context_roof", "water"])
             job["ortho"] = o
-            info["ortho"] = o["source"]
+            info["ortho"] = o["source"] + f" on {', '.join(o['materials'])}"
         except Exception as e:  # noqa: BLE001
             print(f"  orthoimagery unavailable ({e}); procedural ground")
     job["camera_fx"] = v.camera_fx
@@ -128,7 +133,7 @@ def render_blender(project: Project, ctx: SiteContext | None, model: Model, v: V
         from ..assets import choose_sky
         try:
             job["sky"] = choose_sky(el, blender, v.sky, "4k" if percent >= 100 else "2k")
-            job["exposure_offset"] = v.exposure_offset - 0.4
+            job["exposure_offset"] = v.exposure_offset
         except Exception as e:  # noqa: BLE001
             print(f"  HDRI sky unavailable ({e}); using physical sky")
     jp = outdir / f"{v.name}.job.json"
