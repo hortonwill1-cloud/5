@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "archkit"
+version = "0.1.0"
+description = "Site-coordinated architectural drawings, 3D models, and photoreal renders from a single design spec."
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "shapely>=2.0",
+  "pyproj>=3.5",
+  "matplotlib>=3.7",
+  "ezdxf>=1.1",
+  "pyyaml>=6",
+  "requests>=2.28",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+archkit = "archkit.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["archkit*"]
