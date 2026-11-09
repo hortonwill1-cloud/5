@@ -28,8 +28,9 @@ Summary of the loop:
 4. **Check**: `archkit check … --strict` until 0 FAIL. Report WARN/INFO honestly.
 5. **Drawings**: `archkit drawings …`; open every `out/sheets/*.png` with Read and fix
    layout problems before delivering.
-6. **Renders**: `--preview` to frame each view, then Cycles drafts (`--percent 25
-   --samples 32`) and finals. Inspect every PNG for seams, floating objects, false trees,
+6. **Renders**: `archkit proof` → read the contact sheet → adjust cameras → re-proof →
+   only then `archkit render` finals (a 1920 px final is ~7 min/view on CPU; never queue
+   finals for views that have not been proofed). Inspect every PNG for seams, floating objects, false trees,
    z-fighting stripes and exposure before delivering.
    Eye-level views: eye z ≈ 5.5 ft (1.7 m) above grade, 24–35 mm lens, verticals level.
 7. **Photomontage** when the user supplies site photos: collect ≥ 6 well-spread control

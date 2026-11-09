@@ -53,7 +53,11 @@ def view_camera(project: Project, ctx: SiteContext | None, v: View) -> tuple[Cam
         from shapely.geometry import Point
         pe = Point(v.eye[0], v.eye[1])
         for f in ctx.of("building") + ctx.of("building_part"):
-            if f.geom.contains(pe) and v.eye[2] < f.height:
+            if not f.geom.contains(pe):
+                continue
+            top_here = surface_top(ctx, f, pe.x, pe.y)
+            eye_z = ctx.ground_z(pe.x, pe.y) + v.eye[2]
+            if eye_z < top_here - 0.3:
                 nm = f.props.get("name") or f.props.get("building") or f"OSM {f.props.get('osm_id')}"
                 raise ValueError(f"view {v.name!r}: camera eye is inside existing building '{nm}' "
                                  f"({f.height:.0f} m tall); move the eye or raise it above the roof")
@@ -69,6 +73,21 @@ def view_camera(project: Project, ctx: SiteContext | None, v: View) -> tuple[Cam
     return look_at(eye, tgt, v.focal_mm, v.sensor_mm, *v.resolution), info
 
 
+def surface_top(ctx: SiteContext, f, x: float, y: float) -> float:
+    """Height (site z) of a context building's measured top surface at (x, y).
+
+    Uses the LiDAR roof grid / fitted roof where available, so open bowls, courtyards and
+    stepped stands are not treated as solid blocks at their maximum height."""
+    from ..model3d import _grid_sampler
+
+    datum = f.props.get("z_datum", 0.0)
+    for r in f.props.get("roof_grids") or []:
+        if (r["x0"] <= x <= r["x0"] + (r["nx"] - 1) * r["cell"] and
+                r["y0"] <= y <= r["y0"] + (r["ny"] - 1) * r["cell"]):
+            return _grid_sampler(r, datum)(x, y)
+    return f.props.get("ground_z", 0.0) + f.height
+
+
 def sightline_blockers(ctx: SiteContext, eye, tgt, step: float = 2.0) -> list[str]:
     """Existing buildings that cut the straight line from eye to target (measured heights)."""
     from shapely.geometry import LineString, Point
@@ -80,13 +99,12 @@ def sightline_blockers(ctx: SiteContext, eye, tgt, step: float = 2.0) -> list[st
         if not f.geom.intersects(line) or f.geom.contains(Point(tgt[:2])):
             continue
         seg = f.geom.intersection(line)
-        top = f.props.get("ground_z", 0.0) + f.height
         for d in np.arange(0, L, step):
             p = line.interpolate(d)
             if seg.distance(p) > 1e-6:
                 continue
             z_line = eye[2] + (tgt[2] - eye[2]) * d / L
-            if top > z_line + 0.5:
+            if surface_top(ctx, f, p.x, p.y) > z_line + 0.5:
                 out.append(f.props.get("name") or f.props.get("building") or f"OSM {f.props.get('osm_id')}")
                 break
     return out
@@ -97,9 +115,21 @@ def sun_for(project: Project, v: View) -> tuple[float, float]:
     return solar_position(project.lat or 0.0, project.lon or 0.0, when)
 
 
+class NotProofed(RuntimeError):
+    pass
+
+
 def render_blender(project: Project, ctx: SiteContext | None, model: Model, v: View,
                    outdir: Path, *, percent: int = 100, samples: int | None = None,
-                   save_blend: bool = False, exposure: float | None = None) -> Path:
+                   save_blend: bool = False, exposure: float | None = None,
+                   check_proof: bool = True, force: bool = False) -> Path:
+    # Finals (> 40 % resolution) require an up-to-date proof of this view's camera/sun.
+    if check_proof and not force and percent > 40:
+        from .proof import unproofed
+        if unproofed([v], outdir.parent):
+            raise NotProofed(f"view {v.name!r} has not been proofed with its current camera/sun "
+                             f"settings - run `archkit proof` and check the contact sheet "
+                             f"(or pass --force)")
     blender = find_blender()
     if blender is None:
         raise RuntimeError("Blender not found. Install Blender 4.x and set $BLENDER, "

@@ -66,7 +66,8 @@ licensed architect/engineer govern. Nothing here is stamped construction documen
 ```
 archkit locate "ADDRESS"
 archkit site | check | drawings | model | shadows | build  PROJECT.yaml
-archkit render PROJECT.yaml [--view NAME] [--preview] [--percent 25] [--samples 64] [--blend]
+archkit proof  PROJECT.yaml [--view NAME]       # ~15 s/view drafts + checks -> contact sheet (first!)
+archkit render PROJECT.yaml [--view NAME] [--percent 25] [--samples 64] [--blend] [--force]
 ```
 
 See `examples/platt-park-infill/project.yaml` for a fully annotated spec and `CLAUDE.md`

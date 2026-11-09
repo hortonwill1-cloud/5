@@ -4,7 +4,8 @@
   archkit check    PROJECT.yaml            coordination + code checks
   archkit drawings PROJECT.yaml            PDF set, sheet PNGs, DXF files
   archkit model    PROJECT.yaml            OBJ/MTL of building + context
-  archkit render   PROJECT.yaml [--view N] [--preview] [--percent 25]
+  archkit proof    PROJECT.yaml            fast drafts of all views -> contact sheet (do first)
+  archkit render   PROJECT.yaml [--view N] [--preview] [--percent 25] [--force]
   archkit shadows  PROJECT.yaml            solstice/equinox shadow study
   archkit build    PROJECT.yaml            everything
   archkit locate   "ADDRESS"               geocode an address -> lat/lon
@@ -115,13 +116,36 @@ def cmd_render(args):
     views = [v for v in project.views if not args.view or v.name in args.view]
     if not views:
         raise SystemExit("no matching views in spec")
+    if not args.preview and not args.force and args.percent > 40:
+        from .render.proof import unproofed
+        missing = unproofed(views, out)
+        if missing:
+            raise SystemExit(f"not proofed (or camera/sun changed since proof): {', '.join(missing)}\n"
+                             f"run: archkit proof {args.project}   then check "
+                             f"{out / 'proof' / 'contact-sheet.jpg'}   (or pass --force)")
     for v in views:
         if args.preview:
             p = render_preview(project, ctx, m, v, out / "renders" / f"{v.name}-preview.png")
         else:
             p = render_blender(project, ctx, m, v, out / "renders", percent=args.percent,
-                               samples=args.samples, save_blend=args.blend, exposure=args.exposure)
+                               samples=args.samples, save_blend=args.blend, exposure=args.exposure,
+                               force=args.force)
         print(f"{v.name} -> {p}")
+
+
+def cmd_proof(args):
+    from .model3d import full_model
+    from .render.proof import run_proof
+    project, ctx, out = load_all(args.project, args)
+    m = full_model(project, ctx)
+    views = [v for v in project.views if not args.view or v.name in args.view]
+    if not views:
+        raise SystemExit("no matching views in spec")
+    print(f"proofing {len(views)} view(s) at {args.width}px / {args.samples} samples ...")
+    sheet = run_proof(project, ctx, m, views, out, width=args.width, samples=args.samples,
+                      use_blender=not args.preview)
+    print(f"contact sheet -> {sheet}")
+    print("approve framing, then: archkit render " + args.project)
 
 
 def cmd_shadows(args):
@@ -139,8 +163,10 @@ def cmd_build(args):
             args.utc_offset = None
         fn(args)
         args.refresh = False
+    # Finals are never started blind: build ends with the proof contact sheet.
     args.view = None
-    cmd_render(args)
+    args.width, args.samples = 480, 16
+    cmd_proof(args)
 
 
 def main(argv=None):
@@ -151,8 +177,8 @@ def main(argv=None):
     s.add_argument("address")
     s.set_defaults(fn=cmd_locate)
     for name, fn in (("site", cmd_site), ("check", cmd_check), ("drawings", cmd_drawings),
-                     ("model", cmd_model), ("render", cmd_render), ("shadows", cmd_shadows),
-                     ("build", cmd_build)):
+                     ("model", cmd_model), ("proof", cmd_proof), ("render", cmd_render),
+                     ("shadows", cmd_shadows), ("build", cmd_build)):
         s = sub.add_parser(name)
         s.add_argument("project")
         s.add_argument("--out", help="output dir (default: <project dir>/out)")
@@ -167,6 +193,12 @@ def main(argv=None):
             s.add_argument("--samples", type=int)
             s.add_argument("--exposure", type=float)
             s.add_argument("--blend", action="store_true", help="also save .blend scene")
+            s.add_argument("--force", action="store_true", help="render finals without a proof")
+        if name == "proof":
+            s.add_argument("--view", action="append")
+            s.add_argument("--width", type=int, default=480, help="draft width in px")
+            s.add_argument("--samples", type=int, default=16)
+            s.add_argument("--preview", action="store_true", help="built-in renderer (no Blender)")
         if name == "shadows":
             s.add_argument("--utc-offset", type=float, dest="utc_offset")
         s.set_defaults(fn=fn)

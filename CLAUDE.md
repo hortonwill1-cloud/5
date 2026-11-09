@@ -45,8 +45,11 @@ EPT index), api.polyhaven.com + dl.polyhaven.org (CC0 textures/HDRIs), download.
 3. Design: edit walls/openings/rooms/roof in the spec.
 4. `archkit check P.yaml` → fix every FAIL; explain every WARN to the user.
 5. `archkit drawings P.yaml` → `out/*-drawing-set.pdf`, `out/sheets/*.png`, `out/dxf/*.dxf`.
-6. `archkit render P.yaml --preview` for framing, then `archkit render P.yaml` (Cycles).
-   Use `--percent 25 --samples 32` for drafts; finals at 100% / 256–512 samples.
+6. **`archkit proof P.yaml` first, always** (~15 s/view): camera checks (eye inside a
+   building, line of sight, sun below horizon, extreme lens) + 480 px Blender drafts on one
+   labelled contact sheet `out/proof/contact-sheet.jpg`. Read it, fix framing, re-proof.
+   Only then `archkit render P.yaml` (finals). Finals refuse any view whose camera/sun
+   settings were never proofed (`--force` overrides — don't use it to skip proofing).
 7. `archkit shadows P.yaml` → solstice/equinox shadow study.
 8. **Always look at the PNG sheets and renders** (Read tool) before reporting —
    check for overlapping text, clipped dimensions, seams, wrong sun side.
